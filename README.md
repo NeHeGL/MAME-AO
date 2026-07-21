@@ -83,20 +83,20 @@ You should use a joystick but you will need a few keyboard commands. Full keyboa
 
 ![MAME-AO Real Man's Joystick](https://raw.githubusercontent.com/sam-ludlow/mame-ao/main/images/mame-ao-joystick.png)
 
-|Key|Description|
-|:----|:----|
-| 5 6 7 8 | Coin Up Player 1-4 |
-| 1 2 3 4 | Start Player 1-4 |
-| Cursor keys | Player 1 Joystick |
-| Left Ctrl | Player 1 Button 1 |
-| Left Alt | Player 1 Button 2 |
-| Space bar | Player 1 Button 3 |
-| Tab | Configuration menu |
-| F2 | Service Mode |
-| F6 | Create Saved State |
-| F7 | Load Saved State |
-| F12 | Snap the screen |
-| Escape | Exit MAME |
+| Key         | Description                           |
+| :---------- | :------------------------------------ |
+| 5 6 7 8     | Coin Up Player 1-4                    |
+| 1 2 3 4     | Start Player 1-4                      |
+| Cursor keys | Player 1 Joystick                     |
+| Left Ctrl   | Player 1 Button 1                     |
+| Left Alt    | Player 1 Button 2                     |
+| Space bar   | Player 1 Button 3                     |
+| Tab         | Configuration menu                    |
+| F2          | Service Mode                          |
+| F6          | Create Saved State                    |
+| F7          | Load Saved State                      |
+| F12         | Snap the screen                       |
+| Escape      | Exit MAME                             |
 | Scroll Lock | Keyboard UI controls OR full keyboard |
 
 ## Settings - User Preferences
@@ -107,67 +107,67 @@ You can configure optional settings from the UI page http://localhost:12380/sett
 ## Configuration
 You can set advanced configuration options using the file `_config.txt`, each line should be `KEY	VALUE` (TAB separator).
 
-| Name | Description | Default | Example |
-| ------------- | ------------- | --- | --- |
-| StorePathRom | Override default ROM Store directory | _STORE | `StorePathRom	E:\STORE_ROM` |
-| StorePathDisk | Override default DISK Store directory | _STORE_DISK | `StorePathDisk	D:\STORE_DISK` |
-| BitTorrentPath | Override default Bit Torrent directory | _BT | `BitTorrentPath	D:\DOME_BT` |
-| MameArguments | Pass additional arguments to MAME |  | `MameArguments	-window` |
-| MameVersion | Run MAME-AO on a fixed MAME version (for old CPUs use this example) | | `MameVersion	0273` |
-| SoftwareListSkip | Skip these software lists when running `.fetch` command for software disks, comma delimited | | `SoftwareListSkip	psx, saturn, dc` |
-| BitTorrentRestartMinutes | Minutes to wait until restarting DOME-BT if no asset data has downloaded | 5 | `BitTorrentRestartMinutes	2.5` |
+| Name                     | Description                                                                                 | Default     | Example                            |
+| ------------------------ | ------------------------------------------------------------------------------------------- | ----------- | ---------------------------------- |
+| StorePathRom             | Override default ROM Store directory                                                        | _STORE      | `StorePathRom	E:\STORE_ROM`        |
+| StorePathDisk            | Override default DISK Store directory                                                       | _STORE_DISK | `StorePathDisk	D:\STORE_DISK`      |
+| BitTorrentPath           | Override default Bit Torrent directory                                                      | _BT         | `BitTorrentPath	D:\DOME_BT`        |
+| MameArguments            | Pass additional arguments to MAME                                                           |             | `MameArguments	-window`            |
+| MameVersion              | Run MAME-AO on a fixed MAME version (for old CPUs use this example)                         |             | `MameVersion	0273`                 |
+| SoftwareListSkip         | Skip these software lists when running `.fetch` command for software disks, comma delimited |             | `SoftwareListSkip	psx, saturn, dc` |
+| BitTorrentRestartMinutes | Minutes to wait until restarting DOME-BT if no asset data has downloaded                    | 5           | `BitTorrentRestartMinutes	2.5`     |
 
 MAME-AO must be restarted for changes to `_config.txt` to take affect.
 
 ## AO Shell
 From the shell you can enter the short machine name, other options are available for software.
 
-|Command|Description|Example|
-|:----|:----|:----|
-| \<machine\> | Start machine | `mrdo` |
-| \<machine\>@\<core\> | Start machine in core (`mame`, `hbmame`) |`dinos163@hbmame`|
-| \<machine\> \<arguments\> | With all place commands you can put arguments at the end | `mrdo -window` |
-| \<machine\> \<software\> | Start machine with software | `a2600 et` |
+| Command                                    | Description                                                          | Example                |
+| :----------------------------------------- | :------------------------------------------------------------------- | :--------------------- |
+| \<machine\>                                | Start machine                                                        | `mrdo`                 |
+| \<machine\>@\<core\>                       | Start machine in core (`mame`, `hbmame`)                             | `dinos163@hbmame`      |
+| \<machine\> \<arguments\>                  | With all place commands you can put arguments at the end             | `mrdo -window`         |
+| \<machine\> \<software\>                   | Start machine with software                                          | `a2600 et`             |
 | \<machine\> \<software\>@\<software list\> | Start machine with software, specify software list for correct media | `cpc464p barb2@gx4000` |
 
 There are also commands available they all start with a dot `.`
 
-|Command|Description|Example|
-|:----|:----|:----|
-|.|Run MAME directly without placing files, use it start MAME's built in UI or pass arguments to MAME|`. a2600 -cart et`|
-|.0000|Run a previous version of MAME directly , without placing files, useful for going back to saved state from previous sessions |`.0123 gaunt2`|
-|.accdb|Create MS Access databases (machine & software) linked to SQLite, usfull for looking at MAME-AO data|`.accdb`|
-|.accdbxml|Create MS Access databases (machine & software) from XML, usfull for looking at complete MAME data|`.accdbxml`|
-|.bt|Enable the bit torrent client|`.bt`|
-|.btr|Restart the bit torrent client|`.btr`|
-|.bts|Stop the bit torrent client|`.bts`|
-|.btx|Remove the bit torrent client|`.btx`|
-|.core|Change emulation core|`.core hbmame`|
-|.creds|Enter archive.org credentials, If you press `ENTER` twice your auth cookie will be deleted.|`.creds`|
-|.dbm|Machine database SQL query|`.dbm SELECT rom.* FROM machine INNER JOIN rom ON machine.machine_id = rom.machine_id WHERE machine.name = 'mrdo'`|
-|.dbs|Software database SQL query|`.dbs SELECT softwarelist.* FROM softwarelist ORDER BY softwarelist.name`|
-|.export|Run the export function, [see export section](#export)|`.export mr C:\EXPORT`|
-|.fetch|Fetch all required assets, used for maintaining full sets|`.fetch sr`|
-|.help|**NEW** Show comprehensive command reference with all available commands|`.help`|
-|.import|Run the import function, [see import section](#import)|`.import C:\IMPORT`|
-|.list|List saved state and previous MAME versions|`.list`|
-|.place|**NEW** Place specific assets for a machine/software (MR, MD, SR, SD, *)|`.place mr pacman ""`|
-|.r|Reload `UI.html` & `_styles.css` usfull when developing the UI|`.r`|
-|.readme|Show the mame-ao README on github.com|`.readme`|
-|.report|Run reports, [see reports section](#reports)|`.report avsum`|
-|.snap|Run the snapshot collection function, [see snapshots section](#snapshots)|`.snap C:\snaps`|
-|.softname|Fetch & Export complete software list with friendly filenames, usefull for outside MAME|`.softname electron_cart C:\EXPORT`|
-|.softnamed|Fetch & Export complete software list with friendly filenames in directories, usefull for outside MAME|`.softnamed c64_cart C:\EXPORT`|
-|.software|Fetch & Place complete software list, you can have them all ready then load inside MAME.|`.software bbcb_flop`|
-|.style|Write file `_styles.css` so you can modify UI stlyes, use command `.r` to refresh changes.|`.style`|
-|.svg|Convert bitmaps to SVG, [see SVG section](#svg)|`.svg C:\snaps\file.png`|
-|.test|Perform asset place tests|`.test everything 100`|
-|.ui|Launch the UI in default browser|`.ui`|
-|.up|Self update MAME-AO to the latest on GitHub|`.up`|
-|.upany|Self update MAME-AO anyway even if up to date, this can be used to clear the Windows Defender warning on first install.|`.upany`|
-|.update|**NEW** Download & place all missing assets + artwork/samples (MR, MD, SR, SD, *)|`.update mr`|
-|.valid|Validate the hash store, [see validate store section](#validate-store)|`.valid rom`|
-|.what|View current MAME whatsnew.txt in default browser.|`.what`|
+| Command    | Description                                                                                                                  | Example                                                                                                            |
+| :--------- | :--------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
+| .          | Run MAME directly without placing files, use it start MAME's built in UI or pass arguments to MAME                           | `. a2600 -cart et`                                                                                                 |
+| .0000      | Run a previous version of MAME directly , without placing files, useful for going back to saved state from previous sessions | `.0123 gaunt2`                                                                                                     |
+| .accdb     | Create MS Access databases (machine & software) linked to SQLite, usfull for looking at MAME-AO data                         | `.accdb`                                                                                                           |
+| .accdbxml  | Create MS Access databases (machine & software) from XML, usfull for looking at complete MAME data                           | `.accdbxml`                                                                                                        |
+| .bt        | Enable the bit torrent client                                                                                                | `.bt`                                                                                                              |
+| .btr       | Restart the bit torrent client                                                                                               | `.btr`                                                                                                             |
+| .bts       | Stop the bit torrent client                                                                                                  | `.bts`                                                                                                             |
+| .btx       | Remove the bit torrent client                                                                                                | `.btx`                                                                                                             |
+| .core      | Change emulation core                                                                                                        | `.core hbmame`                                                                                                     |
+| .creds     | Enter archive.org credentials, If you press `ENTER` twice your auth cookie will be deleted.                                  | `.creds`                                                                                                           |
+| .dbm       | Machine database SQL query                                                                                                   | `.dbm SELECT rom.* FROM machine INNER JOIN rom ON machine.machine_id = rom.machine_id WHERE machine.name = 'mrdo'` |
+| .dbs       | Software database SQL query                                                                                                  | `.dbs SELECT softwarelist.* FROM softwarelist ORDER BY softwarelist.name`                                          |
+| .export    | Run the export function, [see export section](#export)                                                                       | `.export mr C:\EXPORT`                                                                                             |
+| .fetch     | Fetch all required assets, used for maintaining full sets                                                                    | `.fetch sr`                                                                                                        |
+| .help      | **NEW** Show comprehensive command reference with all available commands                                                     | `.help`                                                                                                            |
+| .import    | Run the import function, [see import section](#import)                                                                       | `.import C:\IMPORT`                                                                                                |
+| .list      | List saved state and previous MAME versions                                                                                  | `.list`                                                                                                            |
+| .place     | **NEW** Place specific assets for a machine/software (MR, MD, SR, SD, *)                                                     | `.place mr pacman ""`                                                                                              |
+| .r         | Reload `UI.html` & `_styles.css` usfull when developing the UI                                                               | `.r`                                                                                                               |
+| .readme    | Show the mame-ao README on github.com                                                                                        | `.readme`                                                                                                          |
+| .report    | Run reports, [see reports section](#reports)                                                                                 | `.report avsum`                                                                                                    |
+| .snap      | Run the snapshot collection function, [see snapshots section](#snapshots)                                                    | `.snap C:\snaps`                                                                                                   |
+| .softname  | Fetch & Export complete software list with friendly filenames, usefull for outside MAME                                      | `.softname electron_cart C:\EXPORT`                                                                                |
+| .softnamed | Fetch & Export complete software list with friendly filenames in directories, usefull for outside MAME                       | `.softnamed c64_cart C:\EXPORT`                                                                                    |
+| .software  | Fetch & Place complete software list, you can have them all ready then load inside MAME.                                     | `.software bbcb_flop`                                                                                              |
+| .style     | Write file `_styles.css` so you can modify UI stlyes, use command `.r` to refresh changes.                                   | `.style`                                                                                                           |
+| .svg       | Convert bitmaps to SVG, [see SVG section](#svg)                                                                              | `.svg C:\snaps\file.png`                                                                                           |
+| .test      | Perform asset place tests                                                                                                    | `.test everything 100`                                                                                             |
+| .ui        | Launch the UI in default browser                                                                                             | `.ui`                                                                                                              |
+| .up        | Self update MAME-AO to the latest on GitHub                                                                                  | `.up`                                                                                                              |
+| .upany     | Self update MAME-AO anyway even if up to date, this can be used to clear the Windows Defender warning on first install.      | `.upany`                                                                                                           |
+| .update    | **NEW** Download & place all missing assets + artwork/samples (MR, MD, SR, SD, *)                                            | `.update mr`                                                                                                       |
+| .valid     | Validate the hash store, [see validate store section](#validate-store)                                                       | `.valid rom`                                                                                                       |
+| .what      | View current MAME whatsnew.txt in default browser.                                                                           | `.what`                                                                                                            |
 
 ## Saved State and previous MAME versions
 Saved state somtimes does not work between MAME versions. If you have started something with saved state you may as well use the same MAME version.
@@ -288,44 +288,44 @@ You can specify a specific version e.g.`version=0250` otherwise the latest will 
 For `get` operations if a new version if found the exit code will be set to 1.
 
 ### MAME
-|Operation|Description|Example|
-|:----|:----|:----|
-| mame-get | Download and extract MAME binaries. | `mame-ao.exe mame-get directory="C:\ao-data\mame"` |
-| mame-xml | Extract XML from MAME. | `mame-ao.exe mame-xml directory="C:\ao-data\mame"` |
-| mame-json | Convert XML to JSON. | `mame-ao.exe mame-json directory="C:\ao-data\mame"` |
-| mame-sqlite | Convert XML to SQLite. | `mame-ao.exe mame-sqlite directory="C:\ao-data\mame"` |
-| mame-mssql | Convert XML to Microsoft SQL. | `mame-ao.exe mame-mssql directory="C:\ao-data\mame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-mame-machine, ao-mame-software"` |
-| mame-mssql-payload | Create web payload tables. | `mame-ao.exe mame-mssql-payload directory="C:\ao-data\mame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-mame-machine, ao-mame-software"` |
+| Operation          | Description                         | Example                                                                                                                                                                                             |
+| :----------------- | :---------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mame-get           | Download and extract MAME binaries. | `mame-ao.exe mame-get directory="C:\ao-data\mame"`                                                                                                                                                  |
+| mame-xml           | Extract XML from MAME.              | `mame-ao.exe mame-xml directory="C:\ao-data\mame"`                                                                                                                                                  |
+| mame-json          | Convert XML to JSON.                | `mame-ao.exe mame-json directory="C:\ao-data\mame"`                                                                                                                                                 |
+| mame-sqlite        | Convert XML to SQLite.              | `mame-ao.exe mame-sqlite directory="C:\ao-data\mame"`                                                                                                                                               |
+| mame-mssql         | Convert XML to Microsoft SQL.       | `mame-ao.exe mame-mssql directory="C:\ao-data\mame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-mame-machine, ao-mame-software"`         |
+| mame-mssql-payload | Create web payload tables.          | `mame-ao.exe mame-mssql-payload directory="C:\ao-data\mame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-mame-machine, ao-mame-software"` |
 
 ### HBMAME
-|Operation|Description|Example|
-|:----|:----|:----|
-| hbmame-get | Download and extract HBMAME binaries. | `mame-ao.exe hbmame-get directory="C:\ao-data\hbmame"` |
-| hbmame-xml | Extract XML from HBMAME. | `mame-ao.exe hbmame-xml directory="C:\ao-data\hbmame"` |
-| hbmame-json | Convert XML to JSON. | `mame-ao.exe hbmame-json directory="C:\ao-data\hbmame"` |
-| hbmame-sqlite | Convert XML to SQLite. | `mame-ao.exe hbmame-sqlite directory="C:\ao-data\hbmame"` |
-| hbmame-mssql | Convert XML to Microsoft SQL. | `mame-ao.exe hbmame-mssql directory="C:\ao-data\hbmame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-hbmame-machine, ao-hbmame-software"` |
-| hbmame-mssql-payload | Create web payload tables. | `mame-ao.exe hbmame-mssql-payload directory="C:\ao-data\hbmame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-hbmame-machine, ao-hbmame-software"` |
+| Operation            | Description                           | Example                                                                                                                                                                                                     |
+| :------------------- | :------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| hbmame-get           | Download and extract HBMAME binaries. | `mame-ao.exe hbmame-get directory="C:\ao-data\hbmame"`                                                                                                                                                      |
+| hbmame-xml           | Extract XML from HBMAME.              | `mame-ao.exe hbmame-xml directory="C:\ao-data\hbmame"`                                                                                                                                                      |
+| hbmame-json          | Convert XML to JSON.                  | `mame-ao.exe hbmame-json directory="C:\ao-data\hbmame"`                                                                                                                                                     |
+| hbmame-sqlite        | Convert XML to SQLite.                | `mame-ao.exe hbmame-sqlite directory="C:\ao-data\hbmame"`                                                                                                                                                   |
+| hbmame-mssql         | Convert XML to Microsoft SQL.         | `mame-ao.exe hbmame-mssql directory="C:\ao-data\hbmame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-hbmame-machine, ao-hbmame-software"`         |
+| hbmame-mssql-payload | Create web payload tables.            | `mame-ao.exe hbmame-mssql-payload directory="C:\ao-data\hbmame" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-hbmame-machine, ao-hbmame-software"` |
 
 ### FBNeo
-|Operation|Description|Example|
-|:----|:----|:----|
-| fbneo-get | Download and extract FBNeo binaries. | `mame-ao.exe fbneo-get directory="C:\ao-data\fbneo"` |
-| fbneo-xml | Extract XML from FBNeo. | `mame-ao.exe fbneo-xml directory="C:\ao-data\fbneo"` |
-| fbneo-json | Convert XML to JSON. | `mame-ao.exe fbneo-json directory="C:\ao-data\fbneo"` |
-| fbneo-sqlite | Convert XML to SQLite. | `mame-ao.exe fbneo-sqlite directory="C:\ao-data\fbneo"` |
-| fbneo-mssql | Convert XML to Microsoft SQL. | `mame-ao.exe fbneo-mssql directory="C:\ao-data\fbneo" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-fbneo"` |
-| fbneo-mssql-payload | Create web payload tables. | `mame-ao.exe fbneo-mssql-payload directory="C:\ao-data\fbneo" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-fbneo"` |
+| Operation           | Description                          | Example                                                                                                                                                                      |
+| :------------------ | :----------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| fbneo-get           | Download and extract FBNeo binaries. | `mame-ao.exe fbneo-get directory="C:\ao-data\fbneo"`                                                                                                                         |
+| fbneo-xml           | Extract XML from FBNeo.              | `mame-ao.exe fbneo-xml directory="C:\ao-data\fbneo"`                                                                                                                         |
+| fbneo-json          | Convert XML to JSON.                 | `mame-ao.exe fbneo-json directory="C:\ao-data\fbneo"`                                                                                                                        |
+| fbneo-sqlite        | Convert XML to SQLite.               | `mame-ao.exe fbneo-sqlite directory="C:\ao-data\fbneo"`                                                                                                                      |
+| fbneo-mssql         | Convert XML to Microsoft SQL.        | `mame-ao.exe fbneo-mssql directory="C:\ao-data\fbneo" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-fbneo"`         |
+| fbneo-mssql-payload | Create web payload tables.           | `mame-ao.exe fbneo-mssql-payload directory="C:\ao-data\fbneo" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-fbneo"` |
 
 ### TOSEC
-|Operation|Description|Example|
-|:----|:----|:----|
-| tosec-get | Download TOSEC and extract XML. | `mame-ao.exe tosec-get directory="C:\ao-data\tosec"` |
-| tosec-xml | Extract XML from FBNeo. | `mame-ao.exe tosec-xml directory="C:\ao-data\tosec"` |
-| tosec-json | Convert XML to JSON. | `mame-ao.exe tosec-json directory="C:\ao-data\tosec"` |
-| tosec-sqlite | Convert XML to SQLite. | `mame-ao.exe tosec-sqlite directory="C:\ao-data\tosec"` |
-| tosec-mssql | Convert XML to Microsoft SQL. | `mame-ao.exe tosec-mssql directory="C:\ao-data\tosec" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-tosec"` |
-| tosec-mssql-payload | Create web payload tables. | `mame-ao.exe tosec-mssql-payload directory="C:\ao-data\tosec" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-tosec"` |
+| Operation           | Description                     | Example                                                                                                                                                                      |
+| :------------------ | :------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tosec-get           | Download TOSEC and extract XML. | `mame-ao.exe tosec-get directory="C:\ao-data\tosec"`                                                                                                                         |
+| tosec-xml           | Extract XML from FBNeo.         | `mame-ao.exe tosec-xml directory="C:\ao-data\tosec"`                                                                                                                         |
+| tosec-json          | Convert XML to JSON.            | `mame-ao.exe tosec-json directory="C:\ao-data\tosec"`                                                                                                                        |
+| tosec-sqlite        | Convert XML to SQLite.          | `mame-ao.exe tosec-sqlite directory="C:\ao-data\tosec"`                                                                                                                      |
+| tosec-mssql         | Convert XML to Microsoft SQL.   | `mame-ao.exe tosec-mssql directory="C:\ao-data\tosec" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-tosec"`         |
+| tosec-mssql-payload | Create web payload tables.      | `mame-ao.exe tosec-mssql-payload directory="C:\ao-data\tosec" server="Data Source='my-mssql-server';Integrated Security=True;TrustServerCertificate=True;" names="ao-tosec"` |
 
 ## Internal Workings
 
