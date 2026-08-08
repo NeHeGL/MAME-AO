@@ -343,20 +343,6 @@ namespace Spludlow.MameAO
 			Globals.DiskHashStore = new HashStore(directory, Globals.MameChdMan.Hash);
 			Console.WriteLine("...done.");
 
-			//
-			// New version Check
-			//
-
-			string tag_name = Globals.GitHubRepos["mame-ao"].tag_name;
-			if (Globals.AssemblyVersion != tag_name)
-				Tools.ConsoleHeading(1, new string[] {
-					"New MAME-AO version available",
-					"",
-					$"{Globals.AssemblyVersion} => {tag_name}",
-					"",
-					"Automatically update with shell command \".up\".",
-				});
-
 			Console.WriteLine("");
 		}
 
@@ -482,14 +468,6 @@ namespace Spludlow.MameAO
 						if (parts.Length != 2)
 							throw new ApplicationException($"Usage: {parts[0]} <source directory>");
 						Import.ImportDirectory(parts[1]);
-						return;
-
-					case ".up":
-						SelfUpdate.Update(0);
-						return;
-
-					case ".upany":
-						SelfUpdate.Update(-1);
 						return;
 
 					case ".favm":
@@ -962,8 +940,7 @@ namespace Spludlow.MameAO
 			Console.WriteLine(FormatHelpLine("\u001b[93m.what\u001b[0m", "Show what's available"));
 			Console.WriteLine();
 
-			Console.WriteLine("\u001b[96m=== SYSTEM & UPDATES ===\u001b[0m");
-			Console.WriteLine(FormatHelpLine("\u001b[93m.up\u001b[0m", "Update MAME-AO to latest version"));
+			Console.WriteLine("\u001b[96m=== SYSTEM ===\u001b[0m");
 			Console.WriteLine(FormatHelpLine("\u001b[93m.core <name> [version]\u001b[0m", "Switch emulator core (mame, hbmame)"));
 			Console.WriteLine(FormatHelpLine("\u001b[93m.set <key> <value>\u001b[0m", "Change settings"));
 			Console.WriteLine(FormatHelpLine("\u001b[93m.r\u001b[0m", "Refresh web UI assets"));
