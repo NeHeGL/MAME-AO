@@ -359,6 +359,3 @@ _TEMP/
 _STORE/
 _STORE_DISK/
 mame/
-
-# Release packages
-release/

@@ -24,6 +24,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -63,6 +64,7 @@
       <HintPath>packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\lib\net46\System.Data.SQLite.dll</HintPath>
     </Reference>
     <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
@@ -80,6 +82,8 @@
     <Compile Include="source\CoreFbNeo.cs" />
     <Compile Include="source\CoreHbMame.cs" />
     <Compile Include="source\CoreMame.cs" />
+    <Compile Include="source\CoreNoIntro.cs" />
+    <Compile Include="source\CoreRedump.cs" />
     <Compile Include="source\Cores.cs" />
     <Compile Include="source\CoreTosec.cs" />
     <Compile Include="source\Database.cs" />
@@ -93,7 +97,8 @@
     <Compile Include="source\MameAO.cs" />
     <Compile Include="source\MameChdMan.cs" />
     <Compile Include="source\Operations.cs" />
-    <Compile Include="source\OperationsPayload.cs" />
+    <Compile Include="source\OperationsDatish.cs" />
+    <Compile Include="source\OperationsMameish.cs" />
     <Compile Include="source\PhoneHome.cs" />
     <Compile Include="source\Place.cs" />
     <Compile Include="source\Program.cs" />
@@ -102,6 +107,7 @@
     <Compile Include="source\Reports.cs" />
     <Compile Include="source\Samples.cs" />
     <Compile Include="source\Settings.cs" />
+    <Compile Include="source\Snap.cs" />
     <Compile Include="source\Test.cs" />
     <Compile Include="source\Tools.cs" />
     <Compile Include="source\Upload.cs" />

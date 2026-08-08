@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SQLite;
 using System.IO;
 using System.Linq;
-
-using System.Data.SQLite;
+using System.Xml.Linq;
 
 namespace Spludlow.MameAO
 {
@@ -16,6 +16,7 @@ namespace Spludlow.MameAO
 
 		string[] ICore.ConnectionStrings { get => new string[] { _ConnectionStringMachine, _ConnectionStringSoftware }; }
 		Dictionary<string, string> ICore.SoftwareListDescriptions { get => _SoftwareListDescriptions; }
+		Dictionary<string, string[]> ICore.Filters { get => _Filters; }
 
 		private string _RootDirectory = null;
 		private string _CoreDirectory = null;
@@ -28,6 +29,7 @@ namespace Spludlow.MameAO
 
 		private Dictionary<string, DataRow[]> _MachineDevicesRefs = null;
 		private Dictionary<string, string> _SoftwareListDescriptions = null;
+		private Dictionary<string, string[]> _Filters = null;
 
 		void ICore.Initialize(string directory, string version)
 		{
@@ -160,33 +162,57 @@ namespace Spludlow.MameAO
 
 		public static string LatestLocalVersion(string directory)
 		{
-			SortedDictionary<int, string> versions = new SortedDictionary<int, string>();
-			string version;
+			List<int[]> versions = new List<int[]>();
 
 			foreach (string versionDirectory in Directory.GetDirectories(directory))
 			{
-				version = Path.GetFileName(versionDirectory);
+				string name = Path.GetFileName(versionDirectory);
 
-				if (version.StartsWith("0.") == false)
+				if (name.StartsWith("0.") == false)
 					continue;
 
 				if (File.Exists(Path.Combine(versionDirectory, "hbmame.exe")) == false)
 					continue;
 
-				string[] parts = version.Split('.');
+				string[] parts = name.Split('.');
 
 				if (parts.Length != 3)
 					continue;
 
-				versions.Add(Int32.Parse(parts[2]), version);
+				versions.Add(new int[] { Int32.Parse(parts[0]), Int32.Parse(parts[1]), Int32.Parse(parts[2]) });
 			}
 
 			if (versions.Count == 0)
 				throw new ApplicationException($"HBMAME version not found in '{directory}'.");
 
-			version = versions[versions.Keys.Last()];
+			versions = versions
+				.OrderByDescending(v => v[0])
+				.ThenByDescending(v => v[1])
+				.ThenByDescending(v => v[2])
+				.ToList();
+
+			string version = String.Join(".", versions[0]);
+
+			Console.WriteLine($"LatestLocalVersion\t{directory}\t{version}");
 
 			return version;
+		}
+
+		void ICore.MsAccess()
+		{
+			if (_Version == null)
+				_Version = LatestLocalVersion(_RootDirectory);
+			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
+
+			Cores.MsAccess(_CoreDirectory);
+		}
+		void ICore.Zips()
+		{
+			if (_Version == null)
+				_Version = LatestLocalVersion(_RootDirectory);
+			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
+
+			Cores.Zips(_CoreDirectory);
 		}
 
 
@@ -210,7 +236,6 @@ namespace Spludlow.MameAO
 			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
 
 			InitializeConnections();
-
 
 			Cores.MakeSQLite(_CoreDirectory, ReadXML.RequiredMachineTables, ReadXML.RequiredSoftwareTables, false, Globals.AssemblyVersion, Cores.AddExtraAoData);
 
@@ -252,16 +277,16 @@ namespace Spludlow.MameAO
 			//
 			_SoftwareListDescriptions = new Dictionary<string, string>();
 
-			foreach (DataRow row in Database.ExecuteFill(_ConnectionStringSoftware, "SELECT name, description FROM softwarelist").Rows)
+			foreach (DataRow row in Database.ExecuteFill(_ConnectionStringSoftware, "SELECT [name], [description] FROM [softwarelist] ORDER BY [description]").Rows)
 				_SoftwareListDescriptions.Add((string)row["name"], (string)row["description"]);
 
-
+			_Filters = Cores.GetFilters(_ConnectionStringMachine);
 		}
 
 		private void InitializeConnections()
 		{
-			_ConnectionStringMachine = $"Data Source='{Path.Combine(_CoreDirectory, "_machine.sqlite")}';datetimeformat=CurrentCulture;";
-			_ConnectionStringSoftware = $"Data Source='{Path.Combine(_CoreDirectory, "_software.sqlite")}';datetimeformat=CurrentCulture;";
+			_ConnectionStringMachine = Database.MakeSQLiteConnectionString(Path.Combine(_CoreDirectory, "_machine.sqlite"));
+			_ConnectionStringSoftware = Database.MakeSQLiteConnectionString(Path.Combine(_CoreDirectory, "_software.sqlite"));
 		}
 
 
@@ -281,19 +306,37 @@ namespace Spludlow.MameAO
 		}
 
 
-		void ICore.MSSql()
+		void ICore.MSSql(string serverConnectionString, string[] databaseNames)
 		{
-			throw new NotImplementedException();
+			if (_Version == null)
+				_Version = LatestLocalVersion(_RootDirectory);
+			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
+
+			string[] datasetNames = new string[] { "machine", "software" };
+
+			for (int index = 0; index < 2; ++index)
+			{
+				string datasetName = datasetNames[index];
+				string targetDatabaseName = databaseNames[index];
+
+				string sourceXmlFilename = Path.Combine(_CoreDirectory, $"_{datasetName}.xml");
+
+				XElement document = XElement.Load(sourceXmlFilename);
+				DataSet dataSet = new DataSet();
+				ReadXML.ImportXMLWork(document, dataSet, null, null);
+
+				Database.DataSet2MSSQL(dataSet, serverConnectionString, targetDatabaseName);
+
+				Database.MakeForeignKeys(serverConnectionString, targetDatabaseName);
+			}
 		}
 
-		void ICore.MSSqlHtml()
+		void ICore.MSSqlPayload(string serverConnectionString, string[] databaseNames)
 		{
-			throw new NotImplementedException();
-		}
+			if (_Version == null)
+				_Version = LatestLocalVersion(_RootDirectory);
 
-		void ICore.MSSqlPayload()
-		{
-			throw new NotImplementedException();
+			OperationsMameish.HbMameMSSQLPayloads(_RootDirectory, _Version, serverConnectionString, databaseNames);
 		}
 
 
@@ -330,11 +373,11 @@ namespace Spludlow.MameAO
 		string ICore.GetRequiredMedia(string machine_name, string softwarelist_name, string software_name) =>
 			Cores.GetRequiredMedia(_ConnectionStringMachine, _ConnectionStringSoftware, _SoftwareListDescriptions, machine_name, softwarelist_name, software_name);
 
-		DataTable ICore.QueryMachines(DataQueryProfile profile, int offset, int limit, string search) =>
-			Cores.QueryMachines(_ConnectionStringMachine, profile, offset, limit, search);
+		DataTable ICore.QueryMachines(string profile, int offset, int limit, string search, string manufacturer, string[] status, string[] display, string[] players,string[] control, bool? mechanical, bool? clone, string order, string sort) =>
+			Cores.QueryMachines(_ConnectionStringMachine, profile, offset, limit, search, manufacturer, status, display, players, control, mechanical, clone, order, sort);
 
-		DataTable ICore.QuerySoftware(string softwarelist_name, int offset, int limit, string search, string favorites_machine) =>
-			Cores.QuerySoftware(_ConnectionStringSoftware, softwarelist_name, offset, limit, search, favorites_machine);
+		DataTable ICore.QuerySoftware(string softwarelist_name, int offset, int limit, string search, string publisher, string order, string sort, string favorites_machine) =>
+			Cores.QuerySoftware(_ConnectionStringSoftware, softwarelist_name, offset, limit, search, publisher, order, sort, favorites_machine);
 
 	}
 }

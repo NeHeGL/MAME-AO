@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
 
 using Newtonsoft.Json;
@@ -37,6 +38,10 @@ namespace Spludlow.MameAO
 			{
 				string info = Tools.Query($"{ClientUrl}/api/info");
 				return JsonConvert.DeserializeObject<dynamic>(info);
+			}
+			catch (TaskCanceledException)
+			{
+				return null;
 			}
 			catch (HttpRequestException)
 			{
@@ -86,7 +91,7 @@ namespace Spludlow.MameAO
 
 		public static void Initialize()
 		{
-			Tools.ConsoleHeading(2, "DOME-BT (Pleasuredome Bit Torrents)");
+			Tools.ConsoleHeading(2, "DOME-BT Bit Torrents");
 
 			GitHubRepo repo = Globals.GitHubRepos["dome-bt"];
 
@@ -178,22 +183,38 @@ namespace Spludlow.MameAO
 		{
 			Stop();
 			Start();
+			WaitReady();
+		}
 
+		public static void WaitReady()
+		{
 			Console.Write("Waiting for DOME-BT to be ready ...");
+			
+			dynamic info = null;
 
-			bool ready = false;
-			do {
+			for (int retry = 0; retry < 12; ++retry)
+			{
+				info = DomeInfo();
+				if (info != null)
+					break;
 
-				Thread.Sleep(5000);
+				Console.Write("o");
+				Thread.Sleep(2000);
+			}
 
-				dynamic info = JsonConvert.DeserializeObject<dynamic>(Tools.Query($"{ClientUrl}/api/info"));
+			if (info == null)
+				throw new ApplicationException("Failed to connect to DOME-BT");
+
+			while (true)
+			{
+				info = DomeInfo() ?? throw new ApplicationException("Lost connection to DOME-BT");
+
+				if (info.ready_seconds != null)
+					break;
 
 				Console.Write(".");
-
-				if (info.ready_minutes != null)
-					ready = true;
-
-			} while (ready == false);
+				Thread.Sleep(4000);
+			}
 
 			Console.WriteLine("...done");
 		}
@@ -281,18 +302,29 @@ namespace Spludlow.MameAO
 			Restart();
 		}
 
-		public static Dictionary<string, string> TorrentHashes()
+		public static readonly Dictionary<string, ItemType> ShortNameItemTypeLookup = new Dictionary<string, ItemType>()
 		{
-			Dictionary<string, string> result = new Dictionary<string, string>();
+			{ "mr", ItemType.MachineRom },
+			{ "md", ItemType.MachineDisk },
+			{ "sr", ItemType.SoftwareRom },
+			{ "sd", ItemType.SoftwareDisk },
+		};
+
+		public static Dictionary<ItemType, string> TorrentHashes(string coreName)
+		{
+			Dictionary<ItemType, string> result = new Dictionary<ItemType, string>();
 
 			dynamic info = JsonConvert.DeserializeObject<dynamic>(Tools.Query($"{ClientUrl}/api/info"));
 
-			foreach (dynamic mangent in info.magnets)
+			foreach (dynamic torrent in info.torrents)
 			{
-				//ItemType type = (ItemType) Enum.Parse(typeof(ItemType), (string)mangent.type);
-				result.Add((string)mangent.type, (string)mangent.hash);
-			}
+				if (coreName != (string)torrent.core)
+					continue;
 
+				ItemType type = ShortNameItemTypeLookup[(string)torrent.type];
+				result.Add(type, (string)torrent.hash);
+			}
+			
 			return result;
 		}
 

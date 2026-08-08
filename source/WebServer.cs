@@ -2,15 +2,15 @@
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using System.Net.Sockets;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Linq;
 
 namespace Spludlow.MameAO
 {
@@ -21,12 +21,80 @@ namespace Spludlow.MameAO
 
 		private string _StyleSheetFilename = Path.Combine(Globals.RootDirectory, "_styles.css");
 
-		private readonly string MACHINE_IMAGE_URL = "https://mame.spludlow.co.uk/snap/machine/@machine.jpg";
-		private readonly string SOFTWARE_IMAGE_URL = "https://mame.spludlow.co.uk/snap/software/@softwarelist/@software.jpg";
+		private readonly string MACHINE_IMAGE_URL = "https://data.spludlow.co.uk/@core/machine/@machine.jpg";
+		private readonly string SOFTWARE_IMAGE_URL = "https://data.spludlow.co.uk/@core/software/@softwarelist/@software.jpg";
+
+		private Dictionary<string, string> _Images = new Dictionary<string, string>();
 
 		public WebServer()
 		{
 			RefreshAssets();
+
+			_Images.Add("/images/logo.svg", @"<?xml version='1.0' encoding='UTF-8'?>
+				<svg id='Layer_1' xmlns='http://www.w3.org/2000/svg' version='1.1' viewBox='0 0 120 64'>
+				  <defs>
+					<style>
+					  .st0 {
+						fill: #00aeef;
+					  }
+					  .st1 {
+						fill: #fff;
+					  }
+					  .st2 {
+						fill: #fff000;
+					  }
+					</style>
+				  </defs>
+				  <path class='st0' d='M21.16,32.99v-.24c0-2.7-2.16-4.88-4.83-4.88h-4.6c-2.67,0-4.83,2.19-4.83,4.88s2.16,4.88,4.83,4.88h4.6c1.14,0,2.06.93,2.06,2.08s-.92,2.08-2.06,2.08h-4.6c-1.14,0-2.06-.93-2.06-2.08v-.23h-2.77v.24c0,2.7,2.16,4.88,4.83,4.88h4.6c2.67,0,4.83-2.19,4.83-4.88s-2.16-4.88-4.83-4.88h-4.6c-1.14,0-2.06-.93-2.06-2.08s.92-2.08,2.06-2.08h4.6c1.14,0,2.06.93,2.06,2.08v.24h2.77v-.02h0Z'/>
+				  <path class='st0' d='M43.9,46.44c-1.14,0-2.06-.93-2.06-2.08v-23.46h-2.77v23.46c0,2.7,2.16,4.88,4.83,4.88h.23v-2.8s-.23,0-.23,0Z'/>
+				  <path class='st0' d='M110.32,27.87v11.85c0,1.15-.92,2.08-2.06,2.08s-2.06-.93-2.06-2.08v-7.2h-2.77v7.2h0c0,1.14-.92,2.07-2.06,2.08-1.14,0-2.06-.93-2.06-2.08v-11.85h-2.77v11.85c0,2.7,2.16,4.88,4.83,4.88,1.35,0,2.57-.57,3.45-1.47.87.9,2.09,1.47,3.44,1.47,2.67,0,4.83-2.19,4.83-4.88v-11.85h-2.77Z'/>
+				  <path class='st0' d='M55.16,27.87v9.53c0,1.21-.48,2.31-1.28,3.12-.79.8-1.87,1.29-3.08,1.29s-2.3-.49-3.08-1.29c-.79-.8-1.28-1.89-1.28-3.12v-9.53h-2.77v9.53c0,3.98,3.19,7.2,7.13,7.2,1.64,0,3.16-.57,4.36-1.51v1.51h2.77v-16.73h-2.77Z'/>
+				  <path class='st0' d='M87.58,27.87c-3.94,0-7.14,3.23-7.14,7.2v2.32c0,3.98,3.19,7.2,7.14,7.2s7.13-3.23,7.13-7.2v-2.32c0-3.98-3.19-7.2-7.13-7.2M91.93,37.4c0,1.21-.48,2.31-1.27,3.12-.79.8-1.87,1.29-3.08,1.29s-2.3-.49-3.08-1.29c-.79-.8-1.28-1.89-1.28-3.12v-2.32c0-1.21.49-2.31,1.28-3.12.79-.8,1.87-1.29,3.08-1.29s2.3.49,3.08,1.29c.79.8,1.27,1.89,1.27,3.12v2.32Z'/>
+				  <path class='st0' d='M80.68,46.44c-1.14,0-2.06-.93-2.06-2.08v-23.46h-2.77v23.46c0,2.7,2.16,4.88,4.83,4.88h.23v-2.8s-.23,0-.23,0Z'/>
+				  <path class='st1' d='M58.84,0c-10.91,0-19.77,8.95-19.77,19.98v.24h2.77v-.24c0-4.74,1.91-9.03,4.98-12.14s7.33-5.03,12.02-5.03,8.94,1.93,12.02,5.03,4.98,7.4,4.98,12.14v.24h2.77v-.24c.01-11.03-8.85-19.98-19.77-19.98'/>
+				  <path class='st1' d='M38.3,25.39c-1.69-.84-3.23-1.95-4.55-3.28h0l-.26-.25h0c-3.55-3.46-8.4-5.59-13.72-5.59-10.92,0-19.77,8.94-19.77,19.97,0,7.19,5.76,13.01,12.88,13.01h9.43v-2.8h-9.44c-2.79,0-5.32-1.14-7.15-2.99-1.83-1.85-2.96-4.4-2.96-7.22,0-4.74,1.91-9.03,4.98-12.14,3.08-3.11,7.33-5.03,12.02-5.03s8.94,1.93,12.02,5.03l.17.17.17.17h0c1.72,1.65,3.73,3,5.95,3.95l.33.14v-3.06l-.12-.08h.02Z'/>
+				  <path class='st1' d='M100.22,16.25c-5.33,0-10.17,2.13-13.72,5.59l-.26.26h0c-1.87,1.89-4.19,3.35-6.78,4.2l-.16.06v2.92l.3-.09c3.14-.9,5.96-2.56,8.25-4.77h0l.34-.33h0c3.08-3.11,7.33-5.03,12.02-5.03s8.94,1.93,12.02,5.03c3.08,3.11,4.98,7.4,4.98,12.14,0,2.82-1.13,5.37-2.96,7.22-1.83,1.85-4.36,2.99-7.15,2.99h-25.52v2.8h25.52c7.11,0,12.88-5.83,12.88-13.01,0-11.04-8.86-19.98-19.78-19.98'/>
+				  <path class='st1' d='M77.38,48.81c-.76-.58-1.36-1.34-1.74-2.22l-.06-.14h-30.75v2.8h33.13l-.57-.43h-.01Z'/>
+				  <path class='st1' d='M40.6,48.81c-.76-.58-1.36-1.34-1.74-2.22l-.06-.14h-12.37v2.8h14.74l-.57-.43h0Z'/>
+				  <path class='st2' d='M30.11,27.87c-1.64,0-3.16.57-4.36,1.51v-1.51h-2.77v26.02h1.82l-1.94,4.65h2l-2.36,5.47,8.18-8.27h-3.95l3.71-4.41-.19-.17-.07-.06h-4.44v-7.99c1.2.95,2.72,1.51,4.36,1.51,3.94,0,7.13-3.23,7.13-7.2v-2.32c0-3.98-3.18-7.21-7.12-7.21M30.11,41.8c-2.41,0-4.36-1.97-4.36-4.4v-2.33c0-1.21.48-2.32,1.27-3.12s1.87-1.29,3.08-1.29,2.3.49,3.08,1.29c.78.8,1.28,1.89,1.28,3.12v2.32c0,1.21-.49,2.31-1.28,3.12-.79.8-1.88,1.29-3.08,1.29'/>
+				  <path class='st2' d='M58.84,4.65h-.23v2.8h.23c3.43,0,6.53,1.4,8.77,3.67,2.24,2.26,3.63,5.4,3.63,8.86v9.4c-1.2-.95-2.72-1.51-4.36-1.51-3.94,0-7.13,3.23-7.13,7.2v2.32h0c0,3.98,3.19,7.2,7.13,7.2,1.64,0,3.16-.57,4.36-1.51v1.51h2.77v-7.2h0v-17.41c0-8.47-6.79-15.33-15.17-15.33M71.25,37.4h0c0,1.21-.48,2.32-1.28,3.12-.79.8-1.87,1.29-3.08,1.29s-2.3-.49-3.08-1.29c-.79-.8-1.27-1.89-1.27-3.12h0v-2.32c0-1.21.48-2.31,1.27-3.12.79-.8,1.87-1.29,3.08-1.29,2.41,0,4.36,1.97,4.36,4.4v2.32h0Z'/>
+				</svg>
+			");
+			_Images.Add("/images/fav-off.svg", @"<?xml version='1.0' encoding='UTF-8'?>
+				<svg id='Layer_1' xmlns='http://www.w3.org/2000/svg' version='1.1' viewBox='0 0 18 18'>
+				  <defs>
+					<style>
+					  .st0 {
+						fill: gray;
+					  }
+					</style>
+				  </defs>
+				  <path class='st0' d='M9,1.5l1.51,2.61.22.38h5.21l-2.39,4.14-.22.38.22.38,2.39,4.14h-5.21l-.22.38-1.51,2.61-1.51-2.61-.22-.38H2.07l2.39-4.14.22-.38-.22-.38-2.39-4.14h5.21l.22-.38,1.51-2.61M9,0l-2.16,3.74H.77l3.04,5.26L.77,14.26h6.07l2.16,3.74,2.16-3.74h6.07l-3.04-5.26,3.04-5.26h-6.07l-2.16-3.74h0Z'/>
+				</svg>
+			");
+			_Images.Add("/images/fav-on.svg", @"<?xml version='1.0' encoding='UTF-8'?>
+				<svg id='Layer_1' xmlns='http://www.w3.org/2000/svg' version='1.1' viewBox='0 0 18 18'>
+				  <defs>
+					<style>
+					  .st0 {
+						fill: #ff0;
+					  }
+					</style>
+				  </defs>
+				  <polygon class='st0' points='7.06 13.89 1.42 13.89 4.24 9 1.42 4.11 7.06 4.11 9 .75 10.94 4.11 16.58 4.11 13.76 9 16.58 13.89 10.94 13.89 9 17.25 7.06 13.89'/>
+				  <path d='M9,1.5l1.51,2.61.22.38h5.21l-2.39,4.14-.22.38.22.38,2.39,4.14h-5.21l-.22.38-1.51,2.61-1.51-2.61-.22-.38H2.07l2.39-4.14.22-.38-.22-.38-2.39-4.14h5.21l.22-.38,1.51-2.61M9,0l-2.16,3.74H.77l3.04,5.26L.77,14.26h6.07l2.16,3.74,2.16-3.74h6.07l-3.04-5.26,3.04-5.26h-6.07l-2.16-3.74h0Z'/>
+				</svg>
+			");
+			_Images.Add("/images/back.svg", @"<?xml version='1.0' encoding='UTF-8'?>
+				<svg id='Layer_1' xmlns='http://www.w3.org/2000/svg' version='1.1' viewBox='0 0 48 24'>
+				  <polygon points='24 24 0 12 24 0 24 6 48 6 48 18 24 18 24 24'/>
+				</svg>
+			");
+			_Images.Add("/images/next.svg", @"<?xml version='1.0' encoding='UTF-8'?>
+				<svg id='Layer_1' xmlns='http://www.w3.org/2000/svg' version='1.1' viewBox='0 0 48 24'>
+				  <polygon points='24 24 48 12 24 0 24 6 0 6 0 18 24 18 24 24'/>
+				</svg>
+			");
 		}
 
 		public void RefreshAssets()
@@ -107,6 +175,16 @@ namespace Spludlow.MameAO
 											context.Response.Headers["Content-Type"] = "image/x-icon";
 											context.Response.OutputStream.Write(_FavIcon, 0, _FavIcon.Length);
 											context.Response.Headers["Cache-Control"] = "max-age=60";
+											break;
+
+										case "/images/logo.svg":
+										case "/images/fav-off.svg":
+										case "/images/fav-on.svg":
+										case "/images/next.svg":
+										case "/images/back.svg":
+											context.Response.Headers["Content-Type"] = "image/svg+xml";
+											context.Response.Headers["Cache-Control"] = "max-age=60";
+											writer.Write(_Images[path]);
 											break;
 
 										case "/styles.css":
@@ -241,7 +319,6 @@ namespace Spludlow.MameAO
 				result.key = profile.Key;
 				result.text = profile.Text;
 				result.description = profile.Decription;
-				result.command = profile.CommandText;
 
 				results.Add(result);
 			}
@@ -260,12 +337,14 @@ namespace Spludlow.MameAO
 		{
 			string qs;
 
+			string profile = context.Request.QueryString["profile"] ?? throw new ApplicationException("profile not passed");
+
 			int offset = 0;
 			qs = context.Request.QueryString["offset"];
 			if (qs != null)
 				offset = Int32.Parse(qs);
 
-			int limit = 100;
+			int limit = 250;
 			qs = context.Request.QueryString["limit"];
 			if (qs != null)
 				limit = Int32.Parse(qs);
@@ -277,11 +356,47 @@ namespace Spludlow.MameAO
 			if (search.Length == 0)
 				search = null;
 
-			string profile = context.Request.QueryString["profile"] ?? throw new ApplicationException("profile not passed");
+			string manufacturer = "";
+			qs = context.Request.QueryString["manufacturer"];
+			if (qs != null)
+				manufacturer = qs.Trim();
+			if (manufacturer.Length == 0)
+				manufacturer = null;
 
-			DataQueryProfile dataQueryProfile = Database.GetDataQueryProfile(profile);
+			string[] status = new string[0];
+			qs = context.Request.QueryString["status"];
+			if (qs != null && qs != "")
+				status = qs.Split(',');
 
-			DataTable table = Globals.Core.QueryMachines(dataQueryProfile, offset, limit, search);
+			string[] display = new string[0];
+			qs = context.Request.QueryString["display"];
+			if (qs != null && qs != "")
+				display = qs.Split(',');
+
+			string[] players = new string[0];
+			qs = context.Request.QueryString["players"];
+			if (qs != null && qs != "")
+				players = qs.Split(',');
+
+			string[] control = new string[0];
+			qs = context.Request.QueryString["control"];
+			if (qs != null && qs != "")
+				control = qs.Split(',');
+
+			bool? mechanical = null;
+			qs = context.Request.QueryString["mechanical"];
+			if (qs != null)
+				mechanical = Boolean.Parse(qs);
+
+			bool? clone = null;
+			qs = context.Request.QueryString["clone"];
+			if (qs != null)
+				clone = Boolean.Parse(qs);
+
+			string order = context.Request.QueryString["order"] ?? "description";
+			string sort = context.Request.QueryString["sort"] ?? "asc";
+
+			DataTable table = Globals.Core.QueryMachines(profile, offset, limit, search, manufacturer, status, display, players, control, mechanical, clone, order, sort);
 
 			JArray results = new JArray();
 
@@ -291,13 +406,13 @@ namespace Spludlow.MameAO
 
 				string name = (string)row["name"];
 
-				result.ao_image = MACHINE_IMAGE_URL.Replace("@machine", name);
+				result.ao_image = MACHINE_IMAGE_URL.Replace("@machine", name).Replace("@core", Globals.Core.Name);
 
 				results.Add(result);
 			}
 
 			dynamic json = new JObject();
-			json.profile = dataQueryProfile.Key;
+			json.profile = profile;
 			json.offset = offset;
 			json.limit = limit;
 			json.total = table.Rows.Count == 0 ? 0 : (long)table.Rows[0]["ao_total"];
@@ -325,7 +440,7 @@ namespace Spludlow.MameAO
 
 			dynamic json = RowToJson(machine);
 
-			json.ao_image = MACHINE_IMAGE_URL.Replace("@machine", machine_name);
+			json.ao_image = MACHINE_IMAGE_URL.Replace("@machine", machine_name).Replace("@core", Globals.Core.Name);
 
 			if (machineSoftwareListRows.Length > 0)
 			{
@@ -364,7 +479,7 @@ namespace Spludlow.MameAO
 			if (qs != null)
 				offset = Int32.Parse(qs);
 
-			int limit = 100;
+			int limit = 250;
 			qs = context.Request.QueryString["limit"];
 			if (qs != null)
 				limit = Int32.Parse(qs);
@@ -376,11 +491,21 @@ namespace Spludlow.MameAO
 			if (search.Length == 0)
 				search = null;
 
+			string publisher = "";
+			qs = context.Request.QueryString["publisher"];
+			if (qs != null)
+				publisher = qs.Trim();
+			if (publisher.Length == 0)
+				publisher = null;
+
+			string order = context.Request.QueryString["order"] ?? "description";
+			string sort = context.Request.QueryString["sort"] ?? "asc";
+
 			string favorites_machine = context.Request.QueryString["favorites_machine"];
 			if (favorites_machine != null)
 				favorites_machine = favorites_machine.Trim();
 
-			DataTable table = Globals.Core.QuerySoftware(softwarelist, offset, limit, search, favorites_machine);
+			DataTable table = Globals.Core.QuerySoftware(softwarelist, offset, limit, search, publisher, order, sort, favorites_machine);
 
 			JArray results = new JArray();
 
@@ -392,7 +517,8 @@ namespace Spludlow.MameAO
 
 				result.ao_image = SOFTWARE_IMAGE_URL
 					.Replace("@softwarelist", softwarelist == "@fav" ? (string)row["softwarelist_name"] : softwarelist)
-					.Replace("@software", name);
+					.Replace("@software", name)
+					.Replace("@core", Globals.Core.Name);
 
 				results.Add(result);
 			}
@@ -820,6 +946,34 @@ namespace Spludlow.MameAO
 			writer.WriteLine(json.ToString(Formatting.Indented));
 		}
 
+		public void _api_filters(HttpListenerContext context, StreamWriter writer)
+		{
+			dynamic json = new JObject();
+			json.machine = new JObject();
+
+			foreach (string key in Globals.Core.Filters.Keys)
+			{
+				json.machine[key] = new JObject();
+				switch (key)
+				{
+					case "display":
+					case "status":
+					case "control":
+					case "players":
+						json.machine[key].type = "checkbox";
+						break;
+
+					default:
+						json.machine[key].type = "radio";
+						break;
+				}
+
+				json.machine[key].values = new JArray(Globals.Core.Filters[key]);
+			}
+
+			writer.WriteLine(json.ToString(Formatting.Indented));
+		}
+
 		public void _api_sql_query(HttpListenerContext context, StreamWriter writer)
 		{
 			string database = context.Request.QueryString["database"];
@@ -908,106 +1062,186 @@ namespace Spludlow.MameAO
 		}
 
 		private readonly string _DefaultStyleSheet = @"
-
 			body {
-				font-family: sans-serif;
-				font-size: small;
-				background-color: #c6eafb;
+				font: small sans-serif;
+				background: #c6eafb;
+			}
+			body.busy {
+				background: #e6d4dc;
 			}
 
-			body.busy {
-				background-color: #ffbf00;
+			.header {
+				background: #444;
+				color: #fff;
+				padding: 8px;
+				box-sizing: border-box;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				border-radius: 24px 24px 0 0;
 			}
+			.header h1 { margin: 0; }
+
+			td.good			{ background: #cfc; }
+			td.imperfect	{ background: #ffc; }
+			td.preliminary	{ background: #ffd9b3; }
+			td.bad			{ background: #fcc; }
+
+			td.yes			{ background: #cfc; }
+			td.partial		{ background: #ffc; }
+			td.no			{ background: #ffd9b3; }
 
 			hr {
-				color: #00ADEF;
-				background-color: #00ADEF;
+				background: #00adef;
 				height: 6px;
-				border: none;
-				padding-left: 0px;
+				border: 0;
 			}
+			hr.px2 { height: 2px; }
 
-			table {
-				border-collapse: collapse;
-				font-size: small;
-			}
-
+			table { border-collapse: collapse; }
 			th, td {
 				padding: 2px;
 				text-align: left;
+				border: 1px solid #000;
 			}
-
-			table, th, td {
-				border: 1px solid black;
-			}
-
 			th {
-				background-color: #00ADEF;
-				color: white;
+				background: #555;
+				color: #fff;
 			}
+			tr { background: #ddd; }
+			tr:nth-child(even) { background: #eee; }
 
-			tr:nth-child(odd) {
-				background-color: #c6eafb;
+			table.nav {
+				width: 100%;
+				border-collapse: separate;
+				border-spacing: 2px;
+				background: transparent;
+				border: 0;
 			}
-			tr:nth-child(even) {
-				background-color: #b1e2fa;
+			td.nav-off, td.nav-on {
+				text-align: center;
+				border: 0;
 			}
+			td.nav-off { background: #1a75bc; }
+			td.nav-on  { background: #00adef; }
 
-			a.nav-off {
+			a.nav-off, a.nav-on {
 				text-decoration: none;
-				color: #FFFFFF;
+			}
+			a.nav-off { color: #fff; }
+			a.nav-on  { color: #ff0; }
+
+			.card-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(192px, 1fr));
+				gap: 8px;
 			}
 
-			a.nav-on {
-				text-decoration: none;
-				color: #FFFF00;
+			.card,
+			.card-good,
+			.card-imperfect,
+			.card-preliminary,
+			.card-bad {
+				width: 100%;
 			}
 
-			td.nav-off {
+			.card				{ background: #f2f2f2; }
+			.card-good			{ background: #cfc; }
+			.card-imperfect		{ background: #ffc; }
+			.card-preliminary	{ background: #ffd9b3; }
+			.card-bad			{ background: #fcc; }
+
+			.card-yes			{ background: #cfc; }
+			.card-partial		{ background: #ffc; }
+			.card-no			{ background: #ffd9b3; }
+
+			.card-thumb {
+				width: 128px;
+				height: 128px;
+				margin: 0 auto;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: #262626;
+				color: #fff;
+				overflow: hidden;
+			}
+			.card-thumb img {
+				width: auto;
+				height: auto;
+				max-width: 128px;
+				max-height: 128px;
+				display: block;
+			}
+
+			.card-link {
+				display: block;
 				text-decoration: none;
-				background-color: #1a75bc;
+				color: inherit;
+			}
+
+			.card-body {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+				align-items: center;
 				text-align: center;
 			}
 
-			td.nav-on {
-				text-decoration: none;
-				background-color: #00ADEF;
-				text-align: center;
+			.card-name {
+				font-weight: 600;
+				font-size: 1.2em;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.card-year {
+				font-weight: 600;
 			}
 
-			td.fav-even {
-				background-color: #ffd700;
+			.toolbar {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
 			}
-			td.fav-odd {
-				background-color: #ffdf00;
-			}
-
-			td.good-even {
-				background-color: #90ee90;
-			}
-			td.good-odd {
-				background-color: #98fb98;
+			.checkbox-group {
+				border: 1px solid #00adef;
+				display: inline-flex;
+				padding: 4px;
+				gap: 4px;
 			}
 
-			td.imperfect-even {
-				background-color: #fff000;
+			.toolbar-input {
+				display: flex;
+				gap: 8px;
+				padding: 8px;
 			}
-			td.imperfect-odd {
-				background-color: #ffef00;
-			}
-
-			td.preliminary-even {
-				background-color: #fa8072;
-			}
-			td.preliminary-odd {
-				background-color: #f08080;
+			.toolbar-input input {
+				flex: 1;
+				padding: 4px;
+				box-sizing: border-box;
 			}
 
-			tr.clone-even {
-				background-color: #65c6f5;
+			.fav-checkbox {
+				position: absolute;
+				opacity: 0;
+				width: 0;
+				height: 0;
 			}
-			tr.clone-odd {
-				background-color: #77ccf6;
+			.star {
+				display: inline-block;
+				width: 18px;
+				height: 18px;
+				background: url('/images/fav-off.svg') no-repeat center/contain;
+				cursor: pointer;
+			}
+			.fav-checkbox:checked + .star {
+				background: url('/images/fav-on.svg') no-repeat center/contain;
+			}
+
+			.arrow {
+				width: 48px;
+				height: 24px;
 			}
 		";
 

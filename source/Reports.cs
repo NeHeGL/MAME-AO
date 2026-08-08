@@ -178,6 +178,34 @@ namespace Spludlow.MameAO
 				Text = "Silly Names",
 				Decription = "ROM & DISK Silly Names.",
 			},
+			new ReportType(){
+				Key = "snap-coverage",
+				Group = "interesting",
+				Code = "SNAPCOV",
+				Text = "Snap Coverage",
+				Decription = "What snaps are covered and required.",
+			},
+			new ReportType(){
+				Key = "machine-type",
+				Group = "interesting",
+				Code = "IMTYPE",
+				Text = "Machine Type",
+				Decription = "Determine a machines type.",
+			},
+			new ReportType(){
+				Key = "year-fix",
+				Group = "interesting",
+				Code = "IYEAR",
+				Text = "Year Fix",
+				Decription = "Guess years with question marks.",
+			},
+			new ReportType(){
+				Key = "software-group",
+				Group = "interesting",
+				Code = "SG",
+				Text = "Software Groups",
+				Decription = "Show Software Machine Relationships.",
+			},
 
 		};
 
@@ -367,7 +395,7 @@ namespace Spludlow.MameAO
 					{
 						string value = Convert.ToString(row[column]);
 
-						if (value.StartsWith("<a href=") == true)
+						if (value.StartsWith("<a href=") == true || value.StartsWith("<table") == true)
 							html.Append(value);
 						else
 							html.Append(WebUtility.HtmlEncode(value));
@@ -500,9 +528,9 @@ namespace Spludlow.MameAO
 				"String	String	Int32		Int64	String");
 			dataSet.Tables.Add(totalsTable);
 
-			var torrentHashes = BitTorrent.TorrentHashes();
+			var torrentHashes = BitTorrent.TorrentHashes(Globals.Core.Name);
 
-			foreach (string type in torrentHashes.Keys)
+			foreach (ItemType type in torrentHashes.Keys)
 			{
 				string hash = torrentHashes[type];
 
@@ -520,8 +548,8 @@ namespace Spludlow.MameAO
 
 				switch (type)
 				{
-					case "SoftwareRom":
-					case "SoftwareDisk":
+					case ItemType.SoftwareRom:
+					case ItemType.SoftwareDisk:
 
 						SortedDictionary<string, long[]> lists = new SortedDictionary<string, long[]>();
 
@@ -1736,5 +1764,497 @@ namespace Spludlow.MameAO
 
 			SaveHtmlReport(dataSet, "Silly Names");
 		}
+
+		public void Report_SNAPCOV()
+		{
+			if (Globals.Config.ContainsKey("ServerPath") == false)
+				throw new ApplicationException("You must have ServerPath set in _config.txt");
+
+			DataTable snapTable = Snap.LoadSnapIndex(Path.Combine(Globals.Config["ServerPath"], "snap"), Globals.Core.Name);
+
+			if (snapTable == null)
+				throw new ApplicationException("Snap index not available");
+
+			//
+			// Machine
+			//
+			var machineConnection = new SQLiteConnection(Globals.Core.ConnectionStrings[0]);
+
+			DataTable machineTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					machine.machine_id,
+					machine.name,
+					machine.description,
+					machine.cloneof,
+					machine.isdevice,
+					machine.ismechanical,
+					machine.sourcefile,
+					driver.status,
+					driver.emulation,
+					input.players,
+					input.coins
+				FROM machine
+					LEFT JOIN [input] ON machine.machine_id = [input].machine_id
+					LEFT JOIN [driver] ON machine.machine_id = [driver].machine_id
+				WHERE
+					(machine.isdevice = 'no')
+				ORDER BY
+					machine.ismechanical,
+					machine.description;
+			");
+			DataTable deviceRefTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					device_ref.machine_id,
+					device_ref.name
+				FROM
+					device_ref
+				ORDER BY
+					device_ref.machine_id,
+					device_ref.name;
+			");
+			DataTable softwarelistTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					softwarelist.machine_id,
+					softwarelist.name
+				FROM
+					softwarelist
+				ORDER BY
+					softwarelist.machine_id,
+					softwarelist.name;
+			");
+			DataTable inputControlTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					machine.name,
+					control.*
+				FROM
+					(
+						machine
+						INNER JOIN [input] ON machine.machine_id = input.machine_id
+					)
+					INNER JOIN control ON input.input_id = control.input_id
+				ORDER BY
+					machine.name,
+					control.type,
+					control.player;
+			");
+
+			machineTable.Columns.Add("type", typeof(string));
+			machineTable.Columns.Add("snap", typeof(bool));
+
+			foreach (DataRow machineRow in machineTable.Rows)
+			{
+				long machine_id = (long)machineRow["machine_id"];
+				string machine_name = (string)machineRow["name"];
+				bool isdevice = (string)machineRow["isdevice"] == "yes";
+
+				int coins = machineRow.IsNull("coins") == false ? Int32.Parse((string)machineRow["coins"]) : 0;
+				machineRow["type"] = OperationsMameish.MameishMachineType(machineRow, isdevice, coins, deviceRefTable, softwarelistTable, inputControlTable);
+
+				DataRow snapRow = snapTable.Rows.Find(machine_name);
+
+				machineRow["snap"] = snapRow != null;
+
+				machineRow["name"] = $"<a href=\"https://data.spludlow.co.uk/{Globals.Core.Name}/machine/{machine_name}\" target=\"_blank\" >{machine_name}</a>";
+			}
+
+			foreach (string type in machineTable.Rows.Cast<DataRow>().Select(row => (string)row["type"]).Distinct().OrderBy(type => type))
+			{
+				DataView typeView = new DataView(machineTable);
+				typeView.RowFilter = $"[type] = '{type}' AND [snap] = 0";
+
+				string reportName = $"{type} Snap Coverage";
+
+				SaveHtmlReport(Tools.DataTableFromView(typeView, reportName), reportName);
+			}
+
+			//
+			// Software
+			//
+
+			DataTable software_list_table = Database.ExecuteFill(Globals.Core.ConnectionStrings[1], @"
+				SELECT
+					softwarelist.softwarelist_id,
+					softwarelist.name,
+					softwarelist.description,
+					Count(software.software_id) AS software_count
+				FROM
+					softwarelist
+					INNER JOIN software ON softwarelist.softwarelist_id = software.softwarelist_id
+				GROUP BY
+					softwarelist.softwarelist_id,
+					softwarelist.name,
+					softwarelist.description
+				ORDER BY
+					softwarelist.description;
+			");
+
+			DataTable software_table = Database.ExecuteFill(Globals.Core.ConnectionStrings[1], @"
+				SELECT
+					software.*
+				FROM
+					software
+				ORDER BY
+					software.name;
+			");
+
+			software_list_table.Columns.Add("software_have", typeof(int));
+			software_list_table.Columns.Add("software_missing", typeof(int));
+			software_list_table.Columns.Add("software_coverage", typeof(decimal));
+
+			foreach (DataRow software_list_row in software_list_table.Rows)
+			{
+				var softwarelist_id = (long)software_list_row["softwarelist_id"];
+				var softwarelist_name = (string)software_list_row["name"];
+
+				int software_have_count = 0;
+
+				foreach (DataRow software_row in software_table.Select($"softwarelist_id = {softwarelist_id}"))
+				{
+					var software_name = (string)software_row["name"];
+
+					DataRow snapRow = snapTable.Rows.Find($"{softwarelist_name}\\{software_name}");
+
+					if (snapRow != null)
+						++software_have_count;
+				}
+
+				var software_count = (long)software_list_row["software_count"];
+
+				software_list_row["software_have"] = software_have_count;
+				software_list_row["software_missing"] = software_count - software_have_count;
+				software_list_row["software_coverage"] = Math.Round(((decimal)software_have_count / (decimal)software_count) * 100.0M, 2);
+
+				software_list_row["name"] = $"<a href=\"https://data.spludlow.co.uk/{Globals.Core.Name}/software/{softwarelist_name}\" target=\"_blank\" >{softwarelist_name}</a>";
+			}
+
+			software_list_table.TableName = "Software List Coverage";
+
+			DataView view = new DataView(software_list_table);
+			view.Sort = "[software_coverage] DESC, description";
+
+			SaveHtmlReport(Tools.DataTableFromView(view, software_list_table.TableName), software_list_table.TableName);
+		}
+
+		public void Report_IMTYPE()
+		{
+			var machineConnection = new SQLiteConnection(Globals.Core.ConnectionStrings[0]);
+
+			DataTable machineTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					machine.machine_id,
+					machine.name,
+					machine.description,
+					machine.cloneof,
+					machine.isdevice,
+					machine.sourcefile,
+					driver.status,
+					driver.emulation,
+					input.players,
+					input.coins
+				FROM machine
+					LEFT JOIN [input] ON machine.machine_id = [input].machine_id
+					LEFT JOIN [driver] ON machine.machine_id = [driver].machine_id
+				WHERE
+					(machine.cloneof IS NULL) AND (machine.isdevice = 'no')
+				ORDER BY
+					machine.description;
+			");
+			DataTable deviceRefTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					device_ref.machine_id,
+					device_ref.name
+				FROM
+					device_ref
+				ORDER BY
+					device_ref.machine_id,
+					device_ref.name;
+			");
+			DataTable displayTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					display.machine_id,
+					display.type
+				FROM
+					display
+				ORDER BY
+					display.machine_id,
+					display.type;
+			");
+			DataTable softwarelistTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					softwarelist.machine_id,
+					softwarelist.name
+				FROM
+					softwarelist
+				ORDER BY
+					softwarelist.machine_id,
+					softwarelist.name;
+			");
+			DataTable inputControlTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					machine.name,
+					control.*
+				FROM
+					(
+						machine
+						INNER JOIN [input] ON machine.machine_id = input.machine_id
+					)
+					INNER JOIN control ON input.input_id = control.input_id
+				ORDER BY
+					machine.name,
+					control.type,
+					control.player;
+			");
+
+			machineTable.Columns.Add("type", typeof(string));
+			machineTable.Columns.Add("flags", typeof(string));
+
+			var interestingDevices = new HashSet<string>(new string[] {
+
+				"coin_hopper",			//	Coin Hopper
+				"wpc_lamp",				//	Williams Pinball Controller Lamp Control
+				"meters",				//	Electromechanical meters
+
+				"ace_sp_reelctrl",		//	ACE sp.ACE Reel Controller PCB
+				"ace_sp_reelctrl_pcp",
+				"em_reel",				//	Electromechanical Reel
+
+				"stepper",				//	Stepper Motor
+			});
+
+			foreach (DataRow machineRow in machineTable.Rows)
+			{
+				long machine_id = (long)machineRow["machine_id"];
+				string machine_name = (string)machineRow["name"];
+
+				StringBuilder flags = new StringBuilder();
+
+				int coins = machineRow.IsNull("coins") == false ? Int32.Parse((string)machineRow["coins"]) : 0;
+				var softwareLists = softwarelistTable.Select($"machine_id = {machine_id}").Select(row => (string)row["name"]).ToArray();
+				var deviceNames = deviceRefTable.Select($"machine_id = {machine_id}").Select(row => (string)row["name"]).Distinct().OrderBy(name => name);
+				bool isdevice = (string)machineRow["isdevice"] == "yes";
+
+				if (Int32.Parse((string)machineRow["players"]) > 0)
+					flags.Append("players, ");
+
+				if (coins > 0)
+					flags.Append("coins, ");
+
+				if (displayTable.Select($"machine_id = {machine_id}").Length > 0)
+					flags.Append("display, ");
+
+				if (softwareLists.Length > 0)
+					flags.Append("software, ");
+
+				foreach (string deviceName in deviceNames)
+				{
+					if (interestingDevices.Contains(deviceName) == true)
+						flags.Append($"{deviceName}, ");
+				}
+
+				machineRow["flags"] = flags.ToString();
+
+				machineRow["type"] = OperationsMameish.MameishMachineType(machineRow, isdevice, coins, deviceRefTable, softwarelistTable, inputControlTable);
+
+				machineRow["name"] = $"<a href=\"https://data.spludlow.co.uk/{Globals.Core.Name}/machine/{machine_name}\" target=\"_blank\" >{machine_name}</a>";
+			}
+
+			SaveHtmlReport(machineTable, "Machine Type");
+
+		}
+
+		public void Report_IYEAR()
+		{
+			var machineConnection = new SQLiteConnection(Globals.Core.ConnectionStrings[0]);
+			var softwareConnection = new SQLiteConnection(Globals.Core.ConnectionStrings[1]);
+
+			DataTable machineTable = Database.ExecuteFill(machineConnection, "SELECT [year] FROM [machine] WHERE ([isdevice] = 'no') GROUP BY [year] ORDER BY [year]");
+			DataTable softwareTable = Database.ExecuteFill(softwareConnection, "SELECT [year] FROM [software] GROUP BY [year] ORDER BY [year]");
+
+			List<string> yearStrings = new List<string>();
+
+			foreach (var table in new DataTable[] { machineTable, softwareTable })
+			{
+				foreach (string year in table.Rows.Cast<DataRow>().Select(row => (string)row["year"]))
+					if (yearStrings.Contains(year) == false)
+						yearStrings.Add(year);
+
+			}
+
+			yearStrings.Sort();
+
+			DataTable resultTable = Tools.MakeDataTable(
+				"Year	FixedYear",
+				"String	Int32"
+			);
+
+			foreach (string yearString in yearStrings)
+			{
+				int year = Tools.ParseFixYear(yearString);
+
+				resultTable.Rows.Add(yearString, year);
+			}
+
+			SaveHtmlReport(resultTable, "Year Fix");
+		}
+
+		public class SoftwareGroup
+		{
+			public int id;
+			public HashSet<string> machine_names = new HashSet<string>();
+			public HashSet<string> softwarelist_names = new HashSet<string>();
+
+		}
+
+		public void Report_SG()
+		{
+			var machineConnection = new SQLiteConnection(Globals.Core.ConnectionStrings[0]);
+			var softwareConnection = new SQLiteConnection(Globals.Core.ConnectionStrings[1]);
+
+			DataTable machineSoftwareListTable = Database.ExecuteFill(machineConnection, @"
+				SELECT
+					machine.name AS machine_name,
+					machine.cloneof,
+					softwarelist.name AS softwarelist_name,
+					softwarelist.tag,
+					softwarelist.status,
+					softwarelist.filter
+				FROM
+					machine
+					INNER JOIN softwarelist ON machine.machine_id = softwarelist.machine_id
+				WHERE
+					softwarelist.status = 'original' -- AND machine.cloneof IS NULL
+				ORDER BY
+					machine.name,
+					softwarelist.name;
+			");
+			machineSoftwareListTable.TableName = "Machine SoftwareList";
+
+			Dictionary<string, string> machineDescriptions = new Dictionary<string, string>();
+			foreach (DataRow row in Database.ExecuteFill(machineConnection, @"SELECT name, description FROM machine").Rows)
+				machineDescriptions.Add((string)row[0], (string)row[1]);
+
+			DataTable softwareSoftwareListTable = Database.ExecuteFill(softwareConnection, @"
+				SELECT
+					softwarelist.name,
+					softwarelist.description,
+					COUNT(DISTINCT rom.rom_id) AS rom_count,
+					COUNT(DISTINCT disk.disk_id) AS disk_count
+
+				FROM softwarelist
+				LEFT JOIN software ON softwarelist.softwarelist_id = software.softwarelist_id
+				LEFT JOIN part ON software.software_id = part.software_id
+				LEFT JOIN dataarea ON part.part_id = dataarea.part_id
+				LEFT JOIN rom ON dataarea.dataarea_id = rom.dataarea_id
+					AND rom.sha1 IS NOT NULL
+				LEFT JOIN diskarea ON part.part_id = diskarea.part_id
+				LEFT JOIN disk ON diskarea.diskarea_id = disk.diskarea_id
+					AND disk.sha1 IS NOT NULL
+
+				GROUP BY
+					softwarelist.name
+				ORDER BY
+					softwarelist.name;
+			");
+			softwareSoftwareListTable.TableName = "Software SoftwareList";
+			softwareSoftwareListTable.PrimaryKey = new DataColumn[] { softwareSoftwareListTable.Columns["name"] };
+
+			Dictionary<string, HashSet<string>> machineSoftwareListLookup = new Dictionary<string, HashSet<string>>();
+			Dictionary<string, HashSet<string>> softwareListMachineLookup = new Dictionary<string, HashSet<string>>();
+
+			foreach (DataRow row in machineSoftwareListTable.Rows)
+			{
+				string machine_name = (string)row["machine_name"];
+				string softwarelist_name = (string)row["softwarelist_name"];
+
+				if (machineSoftwareListLookup.ContainsKey(machine_name) == false)
+					machineSoftwareListLookup.Add(machine_name, new HashSet<string>());
+				machineSoftwareListLookup[machine_name].Add(softwarelist_name);
+
+				if (softwareListMachineLookup.ContainsKey(softwarelist_name) == false)
+					softwareListMachineLookup.Add(softwarelist_name, new HashSet<string>());
+				softwareListMachineLookup[softwarelist_name].Add(machine_name);
+			}
+
+			List<SoftwareGroup> softwareGroups = new List<SoftwareGroup>();
+
+			foreach (string softwarelist_name in softwareListMachineLookup.Keys)
+			{
+				foreach (string machine_name in softwareListMachineLookup[softwarelist_name])
+				{
+					var matchingGroups = softwareGroups.Where(g => g.machine_names.Contains(machine_name) || g.softwarelist_names.Contains(softwarelist_name)).ToList();
+					SoftwareGroup group;
+
+					if (matchingGroups.Count == 0)
+					{
+						group = new SoftwareGroup
+						{
+							id = softwareGroups.Count + 1
+						};
+						softwareGroups.Add(group);
+					}
+					else
+					{
+						group = matchingGroups.First();
+
+						foreach (var other in matchingGroups.Skip(1).ToList())
+						{
+							group.machine_names.UnionWith(other.machine_names);
+							group.softwarelist_names.UnionWith(other.softwarelist_names);
+
+							softwareGroups.Remove(other);
+						}
+					}
+					group.machine_names.Add(machine_name);
+					group.softwarelist_names.Add(softwarelist_name);
+				}
+			}
+
+			DataTable table = Tools.MakeDataTable("Software Group",
+				"id		SoftwareLists	Machines",
+				"Int32	String			String"
+			);
+
+			foreach (SoftwareGroup softwareGroup in softwareGroups)
+			{
+				StringBuilder html = new StringBuilder();
+
+				html.Length = 0;
+				html.AppendLine("<table><tr><th>software</th><th>description</th><th>rom</th><th>disk</th></tr>");
+				foreach (var softwarelist_name in softwareGroup.softwarelist_names)
+				{
+					DataRow row = softwareSoftwareListTable.Rows.Find(softwarelist_name);
+					string softwarelist_description = row != null ? (string)row["description"] : "NOT FOUND";
+					long rom_count = row != null ? (long)row["rom_count"] : 0;
+					long disk_count = row != null ? (long)row["disk_count"] : 0;
+					html.AppendLine($"<tr><td>{softwarelist_name}</td><td>{softwarelist_description}</td><td>{(rom_count > 0 ? rom_count.ToString() : "")}</td><td>{(disk_count > 0 ? disk_count.ToString() : "")}</td></tr>");
+				}
+				html.AppendLine("</table>");
+				string softwareHtml = html.ToString();
+
+				html.Length = 0;
+				html.AppendLine("<table><tr><th>machine</th><th>description</th></tr>");
+				foreach (var machine_name in softwareGroup.machine_names)
+				{
+					string machine_description = machineDescriptions[machine_name];
+					html.AppendLine($"<tr><td>{machine_name}</td><td>{machine_description}</td></tr>");
+
+				}
+				html.AppendLine("</table>");
+				string machineHtml = html.ToString();
+
+				table.Rows.Add(softwareGroup.id, softwareHtml, machineHtml);
+			}
+
+			//	TODO: softwarelists without machines, missing software lists from machine
+
+			DataSet dataSet = new DataSet();
+			dataSet.Tables.Add(table);
+			//dataSet.Tables.Add(machineSoftwareListTable);
+			//dataSet.Tables.Add(softwareSoftwareListTable);
+
+			SaveHtmlReport(dataSet, "Software Group");
+
+		}
 	}
+
 }

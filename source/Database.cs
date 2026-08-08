@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Text;
+using System.Linq;
 
 using System.Data.SqlClient;
 using System.Data.SQLite;
@@ -10,136 +11,33 @@ namespace Spludlow.MameAO
 {
 	public class Database
 	{
-		public static DataQueryProfile[] DataQueryProfiles = new DataQueryProfile[] {
-			new DataQueryProfile(){
-				Key = "arcade-good",
-				Text = "Arcade Good",
-				Decription = "Arcade Machines - Status Good - Parents only",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.cloneof IS NULL) AND (driver.status = 'good') AND (machine.runnable = 'yes') AND (machine.isdevice = 'no') AND (ao_input_coins > 0) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "arcade-imperfect",
-				Text = "Arcade Imperfect",
-				Decription = "Arcade Machines - Status Imperfect - Parents only",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.cloneof IS NULL) AND (driver.status = 'imperfect') AND (machine.runnable = 'yes') AND (machine.isdevice = 'no') AND (ao_input_coins > 0) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "computer-console-good",
-				Text = "Computers & Consoles Good",
-				Decription = "Computers & Consoles with software - status good - Parents only",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.cloneof IS NULL) AND (driver.status = 'good') AND (machine.runnable = 'yes') AND (machine.isdevice = 'no') AND (ao_input_coins = 0) AND (ao_softwarelist_count > 0) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "computer-console-imperfect",
-				Text = "Computers & Consoles Imperfect",
-				Decription = "Computers & Consoles with software - status imperfect - Parents only",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.cloneof IS NULL) AND (driver.status = 'imperfect') AND (machine.runnable = 'yes') AND (machine.isdevice = 'no') AND (ao_input_coins = 0) AND (ao_softwarelist_count > 0) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "other-good",
-				Text = "Other Good",
-				Decription = "Other Systems without software - status good - Parents only",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.cloneof IS NULL) AND (driver.status = 'good') AND (machine.runnable = 'yes') AND (machine.isdevice = 'no') AND (ao_input_coins = 0) AND (ao_softwarelist_count = 0) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "other-imperfect",
-				Text = "Other Imperfect",
-				Decription = "Other Systems without software - status imperfect - Parents only",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.cloneof IS NULL) AND (driver.status = 'imperfect') AND (machine.runnable = 'yes') AND (machine.isdevice = 'no') AND (ao_input_coins = 0) AND (ao_softwarelist_count = 0) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "everything",
-				Text = "Everything",
-				Decription = "Absolutely Everything",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.runnable = 'yes') AND (machine.isdevice = 'no') @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-			new DataQueryProfile(){
-				Key = "favorites",
-				Text = "Favorites",
-				Decription = "Favorites",
-				CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((machine.runnable = 'yes') AND (machine.isdevice = 'no') @FAVORITES @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-			},
-		};
+		public static List<DataQueryProfile> DataQueryProfiles = new List<DataQueryProfile>();
 
-		public static DataQueryProfile GetDataQueryProfile(string key)
+		static Database()
 		{
-			DataQueryProfile found = null;
+			string[][] types = new string[][] {
+				new string[] { "arcade",		"Arcade",		"Arcade Machines" },
+				new string[] { "software",		"Software",		"Computers & Consoles with Software" },
+				new string[] { "pinball",		"Pinball",		"Pinball Machines" },
+				new string[] { "gamble",		"Gamble",		"Gamble Machines" },
+				new string[] { "other",			"Other",		"Other Machines" },
+				new string[] { "everything",	"Everything",	"Every Machine" },
+				new string[] { "favorites",		"Favorites",	"Favorite Machines" },
+			};
 
-			if (key.StartsWith("genre") == true)
+			foreach (string[] type in types)
 			{
-				long genre_id = Int64.Parse(key.Split(new char[] { '-' })[1]);
-
-				found = new DataQueryProfile()
-				{
-					Key = key,
-					Text = "genre",
-					Decription = "genre",
-					CommandText =
-					"SELECT machine.*, driver.*, COUNT() OVER() AS ao_total " +
-					"FROM machine INNER JOIN driver ON machine.machine_id = driver.machine_id " +
-					"WHERE ((genre_id = @genre_id) @SEARCH) " +
-					"ORDER BY machine.description COLLATE NOCASE ASC " +
-					"LIMIT @LIMIT OFFSET @OFFSET",
-				};
-
-				found.CommandText = found.CommandText.Replace("@genre_id", genre_id.ToString());
+				DataQueryProfiles.Add(new DataQueryProfile() {
+					Key = type[0],
+					Text = type[1],
+					Decription = type[2],
+				});
 			}
-			else
-			{
-				foreach (DataQueryProfile profile in Database.DataQueryProfiles)
-				{
-					if (profile.Key == key)
-					{
-						found = profile;
-						break;
-					}
-				}
-			}
+		}
 
-			if (found == null)
-				throw new ApplicationException($"Data Profile not found {key}");
-
-			return found;
+		public static string MakeSQLiteConnectionString(string filename)
+		{
+			return $"Data Source={filename};";	// Mode=ReadWrite;Cache=Shared;Pooling=True;Max Pool Size=8;Journal Mode=WAL;Synchronous=Normal;";
 		}
 
 		public static void DataSet2SQLite(string name, string connectionString, DataSet dataSet)
@@ -166,10 +64,6 @@ namespace Spludlow.MameAO
 								if (column.DataType == typeof(int) || column.DataType == typeof(long))
 									dataType = "INTEGER";
 							}
-
-							if (table.TableName == "machine" && column.ColumnName == "description")
-								dataType += " COLLATE NOCASE";
-
 							columnDefinitions.Add($"\"{column.ColumnName}\" {dataType}");
 						}
 
@@ -221,7 +115,8 @@ namespace Spludlow.MameAO
 					if (name == "mame")
 					{
 						foreach (string commandText in new string[] {
-						"CREATE INDEX machine_name_index ON machine(name);"
+							"CREATE INDEX idx_machine_name ON machine(name);",
+							"CREATE INDEX idx_machine_description ON machine([description] COLLATE NOCASE);",
 						})
 							using (SQLiteCommand command = new SQLiteCommand(commandText, connection))
 								command.ExecuteNonQuery();
@@ -229,7 +124,14 @@ namespace Spludlow.MameAO
 
 					if (name == "softwarelists")
 					{
-
+						foreach (string commandText in new string[] {
+							"CREATE INDEX idx_software_name ON software([name]);",
+							"CREATE INDEX idx_software_description ON software([description] COLLATE NOCASE);",
+							"CREATE INDEX idx_softwarelist_name ON softwarelist([name]);",
+							"CREATE INDEX idx_softwarelist_description ON softwarelist([description] COLLATE NOCASE);",
+						})
+							using (SQLiteCommand command = new SQLiteCommand(commandText, connection))
+								command.ExecuteNonQuery();
 					}
 				}
 				finally
@@ -252,6 +154,10 @@ namespace Spludlow.MameAO
 
 			targetConnection = new SqlConnection(serverConnectionString + $"Initial Catalog='{databaseName}';");
 
+			DataSet2MSSQLTables(dataSet, targetConnection);
+		}
+		public static void DataSet2MSSQLTables(DataSet dataSet, SqlConnection targetConnection)
+		{
 			foreach (DataTable table in dataSet.Tables)
 			{
 				List<string> columnDefs = new List<string>();
@@ -268,10 +174,16 @@ namespace Spludlow.MameAO
 						}
 					}
 
+					string length = max == -1 || max > 4096 ? "max" : max.ToString();
+
 					switch (column.DataType.Name)
 					{
 						case "String":
-							columnDefs.Add($"[{column.ColumnName}] NVARCHAR({max})");
+							columnDefs.Add($"[{column.ColumnName}] NVARCHAR({length})");
+							break;
+
+						case "Int32":
+							columnDefs.Add($"[{column.ColumnName}] INT");
 							break;
 
 						case "Int64":
@@ -283,7 +195,12 @@ namespace Spludlow.MameAO
 					}
 				}
 
-				columnDefs.Add($"CONSTRAINT [PK_{table.TableName}] PRIMARY KEY NONCLUSTERED ([{table.Columns[0].ColumnName}])");
+				string[] pkNames = new string[] { table.Columns[0].ColumnName };
+
+				if (table.PrimaryKey != null && table.PrimaryKey.Length > 0)
+					pkNames = table.PrimaryKey.Select(column => column.ColumnName).ToArray();
+
+				columnDefs.Add($"CONSTRAINT [PK_{table.TableName}] PRIMARY KEY NONCLUSTERED ({String.Join(", ", pkNames.Select(name => $"[{name}]"))})");
 
 				string createText = $"CREATE TABLE [{table.TableName}]({String.Join(", ", columnDefs.ToArray())});";
 
@@ -490,12 +407,19 @@ namespace Spludlow.MameAO
 
 		public static void BulkInsert(SqlConnection connection, DataTable table)
 		{
-			using (SqlBulkCopy sqlBulkCopy = new SqlBulkCopy(connection))
+			Console.Write($"Bulk Insert: {table} ({table.Rows.Count}) ...");
+
+			using (SqlBulkCopy sqlBulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.TableLock, null))
 			{
 				sqlBulkCopy.DestinationTableName = table.TableName;
-
 				sqlBulkCopy.BulkCopyTimeout = 1 * 60 * 60;
-
+				sqlBulkCopy.BatchSize = 16 * 1024;
+				sqlBulkCopy.NotifyAfter = table.Rows.Count / 100;
+				sqlBulkCopy.SqlRowsCopied += (sender, e) =>
+				{
+					long percent = e.RowsCopied * 100 / table.Rows.Count;
+					Console.Write($"{percent}.");
+				};
 				connection.Open();
 				try
 				{
@@ -506,6 +430,8 @@ namespace Spludlow.MameAO
 					connection.Close();
 				}
 			}
+
+			Console.WriteLine("...done");
 		}
 
 		public static string[] TableList(SqlConnection connection)
@@ -532,6 +458,47 @@ namespace Spludlow.MameAO
 					return false;
 
 				return true;
+			}
+		}
+
+		public static bool IndexExists(SqlConnection connection, string tableName, string indexName)
+		{
+			using (SqlCommand command = new SqlCommand(@"
+				SELECT 1
+				FROM sys.indexes
+				WHERE name = @INDEX_NAME
+				AND object_id = OBJECT_ID(@TABLE_NAME)
+				", connection))
+			{
+				command.Parameters.AddWithValue("@INDEX_NAME", indexName);
+				command.Parameters.AddWithValue("@TABLE_NAME", tableName);
+
+				object obj = ExecuteScalar(command);
+
+				return !(obj == null || obj is DBNull);
+			}
+		}
+
+		public static bool FullTextColumnExists(SqlConnection connection, string tableName, string columnName)
+		{
+			using (SqlCommand command = new SqlCommand(@"
+				SELECT 1
+				FROM sys.fulltext_index_columns
+				INNER JOIN sys.objects 
+					ON sys.fulltext_index_columns.object_id = sys.objects.object_id
+				INNER JOIN sys.columns 
+					ON sys.fulltext_index_columns.object_id = sys.columns.object_id 
+					AND sys.fulltext_index_columns.column_id = sys.columns.column_id
+				WHERE sys.objects.object_id = OBJECT_ID(@TABLE_NAME)
+					AND sys.columns.name = @COLUMN_NAME
+				", connection))
+			{
+				command.Parameters.AddWithValue("@TABLE_NAME", tableName);
+				command.Parameters.AddWithValue("@COLUMN_NAME", columnName);
+
+				object obj = ExecuteScalar(command);
+
+				return !(obj == null || obj is DBNull);
 			}
 		}
 

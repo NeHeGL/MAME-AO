@@ -17,6 +17,7 @@ namespace Spludlow.MameAO
 		string[] ICore.ConnectionStrings { get => new string[] { _ConnectionString }; }
 
 		Dictionary<string, string> ICore.SoftwareListDescriptions { get => null; }
+		Dictionary<string, string[]> ICore.Filters { get => throw new NotImplementedException(); }
 
 		private string _RootDirectory = null;
 		private string _CoreDirectory = null;
@@ -190,7 +191,6 @@ namespace Spludlow.MameAO
 		{
 			if (_Version == null)
 				_Version = TosecGetLatestDownloadedVersion(_RootDirectory);
-
 			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
 
 			string sqlLiteFilename = Path.Combine(_CoreDirectory, "_tosec.sqlite");
@@ -200,61 +200,88 @@ namespace Spludlow.MameAO
 
 			DataSet dataSet = TosecDataSet(_CoreDirectory);
 
-			string connectionString = $"Data Source='{sqlLiteFilename}';datetimeformat=CurrentCulture;";
+			string connectionString = Database.MakeSQLiteConnectionString(sqlLiteFilename);
 
 			Console.Write($"Creating SQLite database {sqlLiteFilename} ...");
 			Database.DataSet2SQLite("tosec", connectionString, dataSet);
 			Console.WriteLine("... done");
 		}
 
+		void ICore.MsAccess()
+		{
+			if (_Version == null)
+				_Version = TosecGetLatestDownloadedVersion(_RootDirectory);
+			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
+
+			Cores.MsAccess(_CoreDirectory);
+		}
+		void ICore.Zips()
+		{
+			if (_Version == null)
+				_Version = TosecGetLatestDownloadedVersion(_RootDirectory);
+			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
+
+			Cores.Zips(_CoreDirectory);
+		}
+
+		void ICore.MSSql(string serverConnectionString, string[] databaseNames)
+		{
+			if (_Version == null)
+				_Version = TosecGetLatestDownloadedVersion(_RootDirectory);
+			_CoreDirectory = Path.Combine(_RootDirectory, _Version);
+
+			DataSet dataSet = CoreTosec.TosecDataSet(_CoreDirectory);
+
+			Database.DataSet2MSSQL(dataSet, serverConnectionString, databaseNames[0]);
+
+			Database.MakeForeignKeys(serverConnectionString, databaseNames[0]);
+		}
+
+		void ICore.MSSqlPayload(string serverConnectionString, string[] databaseNames)
+		{
+			if (_Version == null)
+				_Version = TosecGetLatestDownloadedVersion(_RootDirectory);
+
+			OperationsDatish.TosecMSSQLPayloads(_RootDirectory, _Version, serverConnectionString, databaseNames[0]);
+		}
+
 		public static DataSet TosecDataSet(string directory)
 		{
-			DataSet dataSet = new DataSet();
-
-			string[] categories = new string[] { "TOSEC", "TOSEC-ISO", "TOSEC-PIX" };
-
-			foreach (string category in categories)
+			var subsets = new Dictionary<string, string>()
 			{
-				string groupDirectory = Path.Combine(directory, category);
+				{ "tosec", "TOSEC" },
+				{ "tosec-iso", "TOSEC-ISO" },
+				{ "tosec-pix", "TOSEC-PIX" },
+			};
 
-				foreach (string filename in Directory.GetFiles(groupDirectory, "*.dat"))
+			var datafileSkipColumns = new HashSet<string>(new string[] { "email", "homepage", "url", "clrmamepro" });
+
+			var subsetsElement = new XElement("subsets");
+
+			foreach (var subset in subsets)
+			{
+				var subsetElement = new XElement("subset");
+				subsetElement.SetAttributeValue("name", subset.Key);
+				subsetElement.SetAttributeValue("description", subset.Value);
+
+				var categoryElement = XElement.Load(Path.Combine(directory, $"_{subset.Key}.xml"));
+
+				foreach (var datafileElement in categoryElement.Elements("datafile"))
 				{
-					string name = Path.GetFileNameWithoutExtension(filename);
+					foreach (var itemElement in datafileElement.Element("header").Elements())
+						if (datafileSkipColumns.Contains(itemElement.Name.LocalName) == false)
+							datafileElement.SetAttributeValue(itemElement.Name, itemElement.Value);
+					datafileElement.Element("header").Remove();
 
-					int index;
+					datafileElement.SetAttributeValue("subset", subset.Key);
 
-					index = name.LastIndexOf("(");
-					if (index == -1)
-						throw new ApplicationException("No last index of open bracket");
-
-					string fileVersion = name.Substring(index).Trim(new char[] { '(', ')' });
-					name = name.Substring(0, index).Trim();
-
-					Console.WriteLine($"{category}\t{name}\t{fileVersion}");
-
-					XElement document = XElement.Load(filename);
-					DataSet fileDataSet = new DataSet();
-					ReadXML.ImportXMLWork(document, fileDataSet, null, null);
-
-					Tools.DataFileMoveHeader(fileDataSet);
-
-					foreach (DataTable table in dataSet.Tables)
-						foreach (DataColumn column in table.Columns)
-							column.AutoIncrement = false;
-
-					foreach (DataRow row in fileDataSet.Tables["datafile"].Rows)
-					{
-						if ((string)row["category"] != category)
-						{
-							row["category"] = category;
-							Console.WriteLine($"Bad datafile category: {filename}");
-                        }
-					}
-
-					Tools.DataFileMergeDataSet(fileDataSet, dataSet);
+					subsetElement.Add(datafileElement);
 				}
+				subsetsElement.Add(subsetElement);
 			}
 
+			var dataSet = new DataSet();
+			ReadXML.ImportXMLWork(subsetsElement, dataSet, null, null);
 			return dataSet;
 		}
 
@@ -273,10 +300,6 @@ namespace Spludlow.MameAO
 
 			return versions[versions.Count - 1];
 		}
-
-
-
-
 
 		void ICore.AllSHA1(HashSet<string> hashSet)
 		{
@@ -363,27 +386,12 @@ namespace Spludlow.MameAO
 			throw new NotImplementedException();
 		}
 
-		void ICore.MSSql()
+		DataTable ICore.QueryMachines(string profile, int offset, int limit, string search, string manufacturer, string[] status, string[] display, string[] players, string[] control, bool? mechanical, bool? clone, string order, string sort)
 		{
 			throw new NotImplementedException();
 		}
 
-		void ICore.MSSqlHtml()
-		{
-			throw new NotImplementedException();
-		}
-
-		void ICore.MSSqlPayload()
-		{
-			throw new NotImplementedException();
-		}
-
-		DataTable ICore.QueryMachines(DataQueryProfile profile, int offset, int limit, string search)
-		{
-			throw new NotImplementedException();
-		}
-
-		DataTable ICore.QuerySoftware(string softwarelist_name, int offset, int limit, string search, string favorites_machine)
+		DataTable ICore.QuerySoftware(string softwarelist_name, int offset, int limit, string search, string publisher, string order, string sort, string favorites_machine)
 		{
 			throw new NotImplementedException();
 		}

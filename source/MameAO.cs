@@ -7,8 +7,8 @@ using System.Data;
 using System.Diagnostics;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
 using System.Net;
+using System.Linq;
 
 namespace Spludlow.MameAO
 {
@@ -26,7 +26,6 @@ namespace Spludlow.MameAO
 		public string Key;
 		public string Text;
 		public string Decription;
-		public string CommandText;
 	}
 
 	public static class Globals
@@ -59,6 +58,8 @@ namespace Spludlow.MameAO
 		public static HttpClient HttpClient;
 		public static string AuthCookie = null;
 
+		public static string DisplayName = TimeZoneInfo.Local.StandardName;
+
 		public static Dictionary<string, string> Config = new Dictionary<string, string>();
 
 		public static string RootDirectory;
@@ -66,6 +67,7 @@ namespace Spludlow.MameAO
 		public static string CacheDirectory;
 		public static string ReportDirectory;
 		public static string BitTorrentDirectory;
+		public static string SnapDirectory;
 
 		public static string MameArguments = "";
 
@@ -104,7 +106,7 @@ namespace Spludlow.MameAO
 
 	public class MameAOProcessor
 	{
-		private IntPtr ConsoleHandle;
+		public IntPtr ConsoleHandle = IntPtr.Zero;
 
 		private readonly string WelcomeText = "\x1b[93m@VERSION\x1b[0m\n\n" +
 "\x1b[96m$$\\      $$\\  $$$$$$\\  $$\\      $$\\ $$$$$$$$\\        $$$$$$\\   $$$$$$\\  \n" +
@@ -120,13 +122,6 @@ namespace Spludlow.MameAO
 "              See the README for more information\n" +
 "             https://github.com/sam-ludlow/mame-ao\n\n";
 
-		[DllImport("user32.dll")]
-		[return: MarshalAs(UnmanagedType.Bool)]
-		static extern bool SetForegroundWindow(IntPtr hWnd);
-
-		[DllImport("user32.dll", EntryPoint = "FindWindow", SetLastError = true)]
-		static extern IntPtr FindWindowByCaption(IntPtr zeroOnly, string lpWindowName);
-
 		public MameAOProcessor(string rootDirectory)
 		{
 			Globals.RootDirectory = rootDirectory;
@@ -140,6 +135,8 @@ namespace Spludlow.MameAO
 
 			Globals.ReportDirectory = Path.Combine(Globals.RootDirectory, "_REPORTS");
 			Directory.CreateDirectory(Globals.ReportDirectory);
+
+			Globals.SnapDirectory = Path.Combine(Globals.RootDirectory, "_SNAP");
 		}
 
 		public void Run()
@@ -156,22 +153,21 @@ namespace Spludlow.MameAO
 			}
 		}
 
-		public void BringToFront()
-		{
-			if (ConsoleHandle == IntPtr.Zero)
-				Console.WriteLine("!!! Wanring can't get handle on Console Window.");
-			else
-				SetForegroundWindow(ConsoleHandle);
-		}
+
 
 		public void Initialize()
 		{
-			Console.Title = $"MAME-AO {Globals.AssemblyVersion}";
+			ConsoleHandle = Tools.GetConsoleWindow();
+
+			string title = $"MAME-AO {Globals.AssemblyVersion}";
+
+			if (ConsoleHandle == IntPtr.Zero)
+				Console.WriteLine($"{title} (No Console Window)");
+			else
+				Console.Title = title;
 
 			Console.Write(WelcomeText.Replace("@VERSION", Globals.AssemblyVersion));
 			Tools.ConsoleHeading(1, "Initializing");
-
-			Globals.AO = this;
 
 			Globals.Settings = new Settings();
 
@@ -192,37 +188,17 @@ namespace Spludlow.MameAO
 
 			Globals.MameArguments = Globals.Config.ContainsKey("MameArguments") == true ? Globals.Config["MameArguments"] : "";
 
+			if (Globals.Config.ContainsKey("BitTorrentUrl") == true)
+				BitTorrent.ClientUrl = Globals.Config["BitTorrentUrl"];
+
+			if (Globals.Config.ContainsKey("DisplayName") == true)
+				Globals.DisplayName = Globals.Config["DisplayName"];
+
 			//
 			// Fixes
 			//
 
-			// Move a few things for multi core
-			string newMameDirectory = Path.Combine(Globals.RootDirectory, "mame");
-			if (Directory.Exists(newMameDirectory) == false)
-			{
-				Directory.CreateDirectory(newMameDirectory);
-
-				foreach (string mameDirectory in Directory.GetDirectories(Globals.RootDirectory))
-				{
-					if (File.Exists(Path.Combine(mameDirectory, "mame.exe")) == true)
-					{
-						string target = Path.Combine(newMameDirectory, Path.GetFileName(mameDirectory));
-						Console.WriteLine($"Move MAME directory for cores. {mameDirectory} => {target}");
-						Directory.Move(mameDirectory, target);
-					}
-				}
-
-				foreach (string name in new string[] { "_FavoritesMachines.txt", "_FavoritesSoftware.txt" })
-				{
-					string source = Path.Combine(Globals.RootDirectory, name);
-					if (File.Exists(source) == true)
-					{
-						string target = Path.Combine(newMameDirectory, name);
-						Console.WriteLine($"Move Favorities for cores. {source} => {target}");
-						File.Move(source, target);
-					}
-				}
-			}
+			// ....
 
 			//
 			// Symbolic Links check
@@ -306,8 +282,6 @@ namespace Spludlow.MameAO
 			//
 			// Bits & Bobs
 			//
-
-			ConsoleHandle = FindWindowByCaption(IntPtr.Zero, Console.Title);
 
 			Globals.Samples = new Samples();
 			Globals.Artwork = new Artwork();
@@ -394,16 +368,26 @@ namespace Spludlow.MameAO
 			if (Globals.WorkerTask != null && Globals.WorkerTask.Status != TaskStatus.RanToCompletion)
 				return false;
 
-			BringToFront();
+			Tools.ConsoleToFront();
 
 			Globals.WorkerTask = new Task(() => {
 				try
 				{
 					Globals.PhoneHome = new PhoneHome(line);
 
-					RunLine(line);
+					string machine_name = RunLine(line);
 
-					Globals.PhoneHome.Success();
+					string snapFilename = null;
+
+					if (machine_name != null && Globals.Settings.Options["SnapHome"] == "Yes")
+					{
+						if (Globals.Settings.Options["Artwork"] == "No")
+							snapFilename = Snap.CollectSnaps(machine_name);
+						else
+							Console.WriteLine("!!! Snap Home does not work with Artwork enabled.");
+					}
+					
+					Globals.PhoneHome.Success(snapFilename);
 				}
 				catch (ApplicationException e)
 				{
@@ -442,7 +426,7 @@ namespace Spludlow.MameAO
 			return true;
 		}
 
-		public void RunLine(string line)
+		public string RunLine(string line)
 		{
 			LineArguments args = new LineArguments(line);
 			string[] parts;
@@ -457,18 +441,18 @@ namespace Spludlow.MameAO
 				{
 					case ".help":
 						ShowHelp();
-						return;
+						return null;
 
 					case ".list":
 						ListSavedState();
-						return;
+						return null;
 
 					case ".import":
 						parts = args.Arguments(2);
 						if (parts.Length != 2)
 							throw new ApplicationException($"Usage: {parts[0]} <source directory>");
 						Import.ImportDirectory(parts[1]);
-						return;
+						return null;
 
 					case ".favm":
 					case ".favmx":
@@ -485,7 +469,7 @@ namespace Spludlow.MameAO
 						else
 							Globals.Favorites.AddMachine(machine);
 
-						return;
+						return null;
 
 					case ".favs":
 					case ".favsx":
@@ -504,7 +488,7 @@ namespace Spludlow.MameAO
 						else
 							Globals.Favorites.AddSoftware(machine, list, software);
 
-						return;
+						return null;
 
 					case ".export":
 						parts = args.Arguments(3);
@@ -542,7 +526,7 @@ namespace Spludlow.MameAO
 								throw new ApplicationException("Export Unknown type not (MR, MD, SR, SD, *).");
 
 						}
-						return;
+						return null;
 
 					case ".report":
 						parts = args.Arguments(2);
@@ -553,15 +537,15 @@ namespace Spludlow.MameAO
 
 						if (Globals.Reports.RunReport(parts[1]) == false)
 							throw new ApplicationException("Report Unknown type.");
-						return;
+						return null;
 
 					case ".snap":
 						parts = args.Arguments(2);
 						if (parts.Length != 2)
 							throw new ApplicationException($"Usage: {parts[0]} <target directory>");
 
-						Mame.CollectSnaps(Path.GetDirectoryName(Globals.Core.Directory), parts[1], Globals.Reports);
-						return;
+						Mame.CollectSnaps(Path.GetDirectoryName(Globals.Core.Directory), parts[1]);
+						return null;
 
 					case ".svg":
 						parts = args.Arguments(2);
@@ -569,19 +553,19 @@ namespace Spludlow.MameAO
 							throw new ApplicationException($"Usage: {parts[0]} <filename or directory>");
 
 						Tools.Bitmap2SVG(parts[1]);
-						return;
+						return null;
 
 					case ".ui":
 						Process.Start(Globals.ListenAddress);
-						return;
+						return null;
 
 					case ".r":
 						Globals.WebServer.RefreshAssets();
-						return;
+						return null;
 
 					case ".readme":
 						Process.Start("https://github.com/sam-ludlow/mame-ao#mame-ao");
-						return;
+						return null;
 
 					case ".valid":
 						parts = args.Arguments(2);
@@ -601,18 +585,18 @@ namespace Spludlow.MameAO
 							default:
 								throw new ApplicationException("Valid Unknown store type (row, disk).");
 						}
-						return;
+						return null;
 
 					case ".what":
 						Process.Start(Globals.ListenAddress + "api/what");
-						return;
+						return null;
 
 					case ".set":
 						parts = args.Arguments(3);
 						if (parts.Length != 3)
 							throw new ApplicationException($"Usage: {parts[0]} <key> <value>");
 						Globals.Settings.Set(parts[1], parts[2]);
-						return;
+						return null;
 
 					case ".dbm":
 					case ".dbs":
@@ -621,7 +605,7 @@ namespace Spludlow.MameAO
 							throw new ApplicationException($"Usage: {parts[0]} <command text>");
 
 						Database.ConsoleQuery(Globals.Core, parts[0].Substring(3), parts[1]);
-						return;
+						return null;
 
 					case ".upload":
 						parts = args.Arguments(5);
@@ -643,7 +627,7 @@ namespace Spludlow.MameAO
 							default:
 								throw new ApplicationException("Upload Unknown type not (MR, MD, SR, SD).");
 						}
-						return;
+						return null;
 
 					case ".aodel":
 						parts = args.Arguments(3);
@@ -651,36 +635,36 @@ namespace Spludlow.MameAO
 							throw new ApplicationException($"Usage: {parts[0]} <archive.org item name> <filename>");
 
 						Upload.DeleteFile(parts[1], parts[2]);
-						return;
+						return null;
 
 					case ".bt":
 						BitTorrent.Initialize();
-						return;
+						return null;
 
 					case ".btx":
 						BitTorrent.Remove();
 						Tools.ConsoleHeading(1, "To use with archive.org enter the command '.creds' if you have not already entered your credentials");
-						return;
+						return null;
 
 					case ".btr":
 						BitTorrent.Restart();
-						return;
+						return null;
 
 					case ".bts":
 						BitTorrent.Stop();
-						return;
+						return null;
 
 					case ".creds":
 						File.Delete(ArchiveOrgAuth.CacheFilename);
 						Globals.AuthCookie = ArchiveOrgAuth.GetCookie();
-						return;
+						return null;
 
 					case ".test":
 						parts = args.Arguments(3);
 						if (parts.Length != 3)
 							throw new ApplicationException($"Usage: {parts[0]} <profile> <count>");
 						Test.Run(parts[1], Int32.Parse(parts[2]));
-						return;
+						return null;
 
 					case ".fetch":
 						parts = args.Arguments(2);
@@ -713,7 +697,78 @@ namespace Spludlow.MameAO
 								throw new ApplicationException("Upload Unknown type not (MR, MD, SR, SD, *).");
 
 						}
-						return;
+						return null;
+
+					case ".place":
+						parts = args.Arguments(4);
+						if (parts.Length != 4)
+							throw new ApplicationException($"Usage: {parts[0]} <type: MR, MD, SR, SD, *> <machine name> <software name or empty>");
+
+						string placeType = parts[1].ToUpper();
+						string placeMachine = parts[2].ToLower();
+						string placeSoftware = parts[3].ToLower();
+
+						switch (placeType)
+						{
+							case "MR":
+								Place.PlaceMachineRoms(Globals.Core, placeMachine, true);
+								break;
+							case "MD":
+								Place.PlaceMachineDisks(Globals.Core, placeMachine, true);
+								break;
+							case "SR":
+								if (string.IsNullOrEmpty(placeSoftware))
+									throw new ApplicationException("Software name required for SR type.");
+								Operations.PlaceSoftwareAssets(Globals.Core, placeMachine, placeSoftware, true, false);
+								break;
+							case "SD":
+								if (string.IsNullOrEmpty(placeSoftware))
+									throw new ApplicationException("Software name required for SD type.");
+								Operations.PlaceSoftwareAssets(Globals.Core, placeMachine, placeSoftware, false, true);
+								break;
+							case "*":
+								Place.PlaceMachineRoms(Globals.Core, placeMachine, true);
+								Place.PlaceMachineDisks(Globals.Core, placeMachine, true);
+								if (!string.IsNullOrEmpty(placeSoftware))
+									Operations.PlaceSoftwareAssets(Globals.Core, placeMachine, placeSoftware, true, true);
+								break;
+
+							default:
+								throw new ApplicationException("Place Unknown type not (MR, MD, SR, SD, *).");
+						}
+						return null;
+
+					case ".update":
+						parts = args.Arguments(2);
+						if (parts.Length != 2)
+							throw new ApplicationException($"Usage: {parts[0]} <type: MR, MD, SR, SD, *>");
+
+						switch (parts[1].ToUpper())
+						{
+							case "MR":
+								Operations.UpdateAssets("MR");
+								break;
+							case "MD":
+								Operations.UpdateAssets("MD");
+								break;
+							case "SR":
+								Operations.UpdateAssets("SR");
+								break;
+							case "SD":
+								Operations.UpdateAssets("SD");
+								break;
+
+							case "*":
+								Operations.UpdateAssets("MR");
+								Operations.UpdateAssets("MD");
+								Operations.UpdateAssets("SR");
+								Operations.UpdateAssets("SD");
+								break;
+
+							default:
+								throw new ApplicationException("Update Unknown type not (MR, MD, SR, SD, *).");
+						}
+						return null;
 
 					case ".place":
 						parts = args.Arguments(4);
@@ -791,7 +846,7 @@ namespace Spludlow.MameAO
 						if (parts.Length != 2)
 							throw new ApplicationException($"Usage: {parts[0]} <software list name>");
 						Import.PlaceSoftwareList(parts[1], true);
-						return;
+						return null;
 
 					case ".softname":
 					case ".softnamed":
@@ -799,23 +854,23 @@ namespace Spludlow.MameAO
 						if (parts.Length != 3)
 							throw new ApplicationException($"Usage: {parts[0]} <software list name> <target directory>");
 						Export.SoftwareListNamedExport(parts[1], parts[2], parts[0].EndsWith("d"));
-						return;
+						return null;
 
 					case ".style":
 						Globals.WebServer.SaveStyle();
-						return;
+						return null;
 
 					case ".accdb":
 						parts = args.Arguments(2);
 						foreach (string filename in Directory.GetFiles(parts.Length > 1 ? parts[1] : Globals.Core.Directory, "*.sqlite"))
 							Tools.MsAccessLinkSQLite(filename);
-						return;
+						return null;
 
 					case ".accdbxml":
 						parts = args.Arguments(2);
 						foreach (string filename in Directory.GetFiles(parts.Length > 1 ? parts[1] : Globals.Core.Directory, "*.xml"))
 							Tools.MsAccessFromXML(filename);
-						return;
+						return null;
 
 					case ".core":
 						parts = args.Arguments(3);
@@ -823,7 +878,7 @@ namespace Spludlow.MameAO
 							throw new ApplicationException($"Usage: {parts[0]} <core name> [version]");
 
 						Cores.EnableCore(parts[1], parts.Length == 3 ? parts[2] : null);
-						return;
+						return null;
 
 					case ".":
 					default:
@@ -840,7 +895,7 @@ namespace Spludlow.MameAO
 
 						Globals.PhoneHome.Ready();
 						Mame.RunMame(binFilename, arguments);
-						return;
+						return null;
 				}
 			}
 
@@ -889,8 +944,101 @@ namespace Spludlow.MameAO
 			if (Globals.Settings.Options["Cheats"] == "Yes")
 				arguments += " -cheat";
 
+			if (Globals.Settings.Options["SnapNative"] == "Yes")
+				arguments += " -snapview native";
+
+			if (Globals.Settings.Options["Window"] == "Yes")
+				arguments += " -window";
+
+			if (Globals.Settings.Options["SnapHome"] == "Yes")
+				Snap.CollectSnaps(machine);
+
 			Globals.PhoneHome.Ready();
+
 			Mame.RunMame(Path.Combine(Globals.Core.Directory, $"{Globals.Core.Name}.exe"), $"{machine} {software} {arguments}");
+
+			return machine;
+		}
+
+		private string FormatHelpLine(string command, string description)
+		{
+			// Strip ANSI codes to get actual visible length
+			string visibleCommand = System.Text.RegularExpressions.Regex.Replace(command, @"\x1b\[[0-9;]*m", "");
+			int padding = 36 - visibleCommand.Length;
+			return command + new string(' ', padding) + "- " + description;
+		}
+
+		public void ShowHelp()
+		{
+			Tools.ConsoleHeading(1, "MAME-AO Command Reference");
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== GENERAL COMMANDS ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.help\u001b[0m", "Show this help message"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.ui\u001b[0m", "Open web user interface"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.readme\u001b[0m", "Open README on GitHub"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.list\u001b[0m", "List saved game states"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== ASSET MANAGEMENT ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.fetch <type>\u001b[0m", "Download missing assets (MR, MD, SR, SD, *)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.update <type>\u001b[0m", "Download & place missing assets + artwork/samples (MR, MD, SR, SD, *)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.place <type> <machine> <sw>\u001b[0m", "Place specific assets (MR, MD, SR, SD, *)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.import <directory>\u001b[0m", "Import files from directory"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.export <type> <directory>\u001b[0m", "Export assets to directory"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== STORAGE ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.valid <rom|disk>\u001b[0m", "Validate hash store integrity"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== FAVORITES ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favm <machine>\u001b[0m", "Add machine to favorites"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favmx <machine>\u001b[0m", "Remove machine from favorites"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favs <machine> <list> <sw>\u001b[0m", "Add software to favorites"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favsx <machine> <list> <sw>\u001b[0m", "Remove software from favorites"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== REPORTS & DATA ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.report <code>\u001b[0m", "Generate report (use without code for list)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.snap <directory>\u001b[0m", "Collect snapshots"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.dbm <query>\u001b[0m", "Query machine database"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.dbs <query>\u001b[0m", "Query software database"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.what\u001b[0m", "Show what's available"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== SYSTEM ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.core <name> [version]\u001b[0m", "Switch emulator core (mame, hbmame)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.set <key> <value>\u001b[0m", "Change settings"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.r\u001b[0m", "Refresh web UI assets"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== BITTORRENT ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.bt\u001b[0m", "Initialize BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.btx\u001b[0m", "Remove BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.btr\u001b[0m", "Restart BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.bts\u001b[0m", "Stop BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.creds\u001b[0m", "Enter Archive.org credentials"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== ADVANCED ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.software <list>\u001b[0m", "Place entire software list"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.softname <list> <dir>\u001b[0m", "Export software list with names"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.svg <file|directory>\u001b[0m", "Convert bitmap to SVG"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.style\u001b[0m", "Save web UI style"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.accdb [directory]\u001b[0m", "Link SQLite to MS Access"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.upload <type> <item> <size>\u001b[0m", "Upload to Archive.org"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== RUNNING GAMES ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m<machine>\u001b[0m", "Run machine (e.g., pacman)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m<machine> <software>\u001b[0m", "Run machine with software"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m<machine> -<args>\u001b[0m", "Run machine with MAME arguments"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.<version>\u001b[0m", "Run specific MAME version"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[92mType codes: MR=Machine ROM, MD=Machine Disk, SR=Software ROM, SD=Software Disk, *=All\u001b[0m");
+			Console.WriteLine();
 		}
 
 		private string FormatHelpLine(string command, string description)

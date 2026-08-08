@@ -24,7 +24,7 @@ namespace Spludlow.MameAO
 			if (arguments.ContainsKey("directory") == false)
 				arguments.Add("directory", Environment.CurrentDirectory);
 
-			MameAOProcessor proc = new MameAOProcessor(arguments["directory"]);
+			Globals.AO = new MameAOProcessor(arguments["directory"]);
 
 			if (arguments.ContainsKey("operation") == true)
 			{
@@ -34,7 +34,7 @@ namespace Spludlow.MameAO
 				return Operations.ProcessOperation(arguments);
 			}
 
-			proc.Run();
+			Globals.AO.Run();
 
 			return 0;
 		}

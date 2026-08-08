@@ -6,9 +6,9 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Spludlow.MameAO
 {
@@ -31,6 +31,8 @@ namespace Spludlow.MameAO
 
 			HttpClient = new HttpClient(handler);
 			HttpClient.DefaultRequestHeaders.Add("User-Agent", $"mame-ao/{Globals.AssemblyVersion} (https://github.com/sam-ludlow/mame-ao)");
+
+			ServicePointManager.FindServicePoint(new Uri("https://archive.org")).Expect100Continue = false;
 		}
 
 		public static string GetCookie()
@@ -88,62 +90,54 @@ namespace Spludlow.MameAO
 
 		private static string GetAuthCookie(string username, string password)
 		{
-			string url = "https://archive.org/account/login";
+			string url = "https://archive.org/services/account/login/";
+			string token;
 
-			var payloadValues = new Dictionary<string, string>()
-				{
-					{ "login", "true" },
-					{ "username", username },
-					{ "password", password },
-					{ "remember", "true" },
-					{ "referer", url },
-					{ "submit-to-login", "Log in" },
-				};
-
-			var payload = new StringBuilder();
-			foreach (string key in payloadValues.Keys)
+			using (Task<HttpResponseMessage> responseMessageTask = HttpClient.GetAsync(url))
 			{
-				if (payload.Length > 0)
-					payload.Append("&");
+				responseMessageTask.Wait();
 
-				payload.Append($"{key}={HttpUtility.UrlEncode(payloadValues[key])}");
+				HttpResponseMessage responseMessage = responseMessageTask.Result;
+				responseMessage.EnsureSuccessStatusCode();
+
+				Task<string> bodyTask = responseMessage.Content.ReadAsStringAsync();
+				bodyTask.Wait();
+
+				dynamic body = JsonConvert.DeserializeObject<dynamic>(bodyTask.Result);
+
+				if ((bool)body.success != true)
+					throw new ApplicationException("Archive.org auth get token not success.");
+
+				token = (string)body.value.token;
 			}
 
-			using (Task<HttpResponseMessage> requestTask = HttpClient.GetAsync(url))
-			{
-				requestTask.Wait();
-				requestTask.Result.EnsureSuccessStatusCode();
-			}
+			dynamic payload = new JObject();
+
+			payload.username = username;
+			payload.password = password;
+			payload.remember = "true";
+			payload.t = token;
 
 			using (var requestMessage = new HttpRequestMessage(HttpMethod.Post, url))
 			{
-				requestMessage.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-				
+				requestMessage.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
+
 				using (Task<HttpResponseMessage> requestTask = HttpClient.SendAsync(requestMessage))
 				{
 					requestTask.Wait();
 					HttpResponseMessage responseMessage = requestTask.Result;
 
-					responseMessage.EnsureSuccessStatusCode();
+					if (responseMessage.StatusCode != HttpStatusCode.OK)
+						throw new HttpRequestException("Dummy 401");
 				}
 			}
 
-			bool ok = false;
 			List<string> cookies = new List<string>();
 			foreach (Cookie cookie in CookieContainer.GetCookies(new Uri(url)))
-			{
 				cookies.Add($"{cookie.Name}={cookie.Value}");
-
-				if (cookie.Name == "logged-in-user")
-					ok = true;
-			}
-
-			if (ok == false)
-				throw new HttpRequestException("Dummy 401");
 
 			return String.Join("; ", cookies.ToArray());
 		}
-
 	}
 
 	public class ArchiveOrgFile
@@ -336,6 +330,28 @@ namespace Spludlow.MameAO
 			}
 
 			return result;
+		}
+
+		public static void UtilGetItemsinSubject()
+		{
+			string subject = "noaen";
+			string search = "redump";
+
+			string url = $"https://archive.org/advancedsearch.php?q=subject:%22{subject}%22+{search}&fl[]=identifier&fl[]=title&sort[]=titleSorter%20asc&rows=1000&page=1&output=json";
+
+			string json = Tools.FetchTextCached(url) ?? throw new ApplicationException("Can't get subject JSON");
+			dynamic metadata = JObject.Parse(json);
+			JArray docs = metadata.response.docs;
+
+			SortedDictionary<string, string> results = new SortedDictionary<string, string>();
+
+			foreach (dynamic doc in docs)
+			{
+				results.Add((string)doc.identifier, (string)doc.title);
+			}
+
+			Tools.PopText(metadata.ToString());
+			Tools.PopText(String.Join(Environment.NewLine, results.Select(pair => $"{pair.Key}"))); //	\t{pair.Value}
 		}
 
 	}

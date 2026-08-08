@@ -5,10 +5,12 @@ using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -23,6 +25,12 @@ namespace Spludlow.MameAO
 {
 	public class Tools
 	{
+		[DllImport("kernel32.dll")]
+		public static extern IntPtr GetConsoleWindow();
+
+		[DllImport("user32.dll")]
+		private static extern bool SetForegroundWindow(IntPtr hWnd);
+
 		private static readonly string[] _SystemOfUnits =
 		{
 			"Bytes (B)",
@@ -54,9 +62,36 @@ namespace Spludlow.MameAO
 			return table;
 		}
 
+		public static void SetDataTableStringLengths(DataTable table)
+		{
+			foreach (DataColumn column in table.Columns)
+			{
+				if (column.DataType != typeof(string))
+					continue;
+
+				int max = 1;
+				foreach (DataRow row in table.Rows)
+				{
+					if (row.IsNull(column) == false)
+					{
+						int len = ((string)row[column]).Length;
+						if (len > max)
+							max = len;
+					}
+				}
+				column.MaxLength = max;
+			}
+		}
+
+		public static void ConsoleToFront()
+		{
+			if (Globals.AO.ConsoleHandle != IntPtr.Zero)
+				SetForegroundWindow(Globals.AO.ConsoleHandle);
+		}
+
 		public static void ConsoleRule(int head)
 		{
-			Console.WriteLine(new String(_HeadingChars[head], Console.WindowWidth - 1));
+			Console.WriteLine(new String(_HeadingChars[head], GetWindowWidth() - 1));
 		}
 
 		public static void ConsoleHeading(int head, string line)
@@ -71,7 +106,7 @@ namespace Spludlow.MameAO
 
 			foreach (string line in lines)
 			{
-				int pad = Console.WindowWidth - 3 - line.Length;
+				int pad = GetWindowWidth() - 3 - line.Length;
 				if (pad < 1)
 					pad = 1;
 				int odd = pad % 2;
@@ -86,6 +121,14 @@ namespace Spludlow.MameAO
 			}
 
 			ConsoleRule(head);
+		}
+
+		private static int GetWindowWidth()
+		{
+			if (Globals.AO.ConsoleHandle == IntPtr.Zero)
+				return 120;
+
+			return Console.WindowWidth;
 		}
 
 		public static void ReportError(Exception e, string title, bool fatal)
@@ -152,11 +195,49 @@ namespace Spludlow.MameAO
 		{
 			PopText(TextTable(table));
 		}
+		public static void PopText(IEnumerable<string> lines)
+		{
+			StringBuilder text = new StringBuilder();
+			foreach (string line in lines)
+				text.AppendLine(line);
+			PopText(text.ToString());
+		}
 		public static void PopText(string text)
 		{
 			string filename = Path.GetTempFileName();
 			File.WriteAllText(filename, text, Encoding.UTF8);
 			Process.Start("notepad.exe", filename);
+		}
+
+		private readonly static HashSet<string> yearFixMatch = new HashSet<string>(new string[] {
+			"?", "??", "???", "0", "00", "000", "0000"
+		});
+		public static int ParseFixYear(string year)
+		{
+			string yearFix = year;
+
+			if (yearFix.Length > 4)
+				yearFix = yearFix.Substring(0, 4);
+
+			yearFix = yearFix.ToUpper().Replace("X", "?");
+
+			if (yearFixMatch.Contains(yearFix))
+				yearFix = "????";
+
+			if (yearFix == "20??")
+				yearFix = "2005";
+
+			if (yearFix[3] == '?')
+				yearFix = yearFix.Substring(0, 3) + "5";
+
+			if (yearFix.Contains("?") == true)
+				yearFix = "1985";
+
+			int year_fixed;
+			if (Int32.TryParse(yearFix, out year_fixed) == false)
+				throw new ApplicationException($"Bad year:\t{year}\t{yearFix}");
+
+			return year_fixed;
 		}
 
 		public static string TextTable(DataTable table)
@@ -320,6 +401,15 @@ namespace Spludlow.MameAO
 			}
 		}
 
+		public static string SHA1Hex(byte[] data)
+		{
+			byte[] hash = _SHA1Managed.ComputeHash(data);
+			StringBuilder hex = new StringBuilder();
+			foreach (byte b in hash)
+				hex.Append(b.ToString("x2"));
+			return hex.ToString();
+		}
+
 		public static string SHA1Hex(Stream stream)
 		{
 			byte[] hash = _SHA1Managed.ComputeHash(stream);
@@ -385,7 +475,8 @@ namespace Spludlow.MameAO
 
 		public static string FetchTextCached(string url)
 		{
-			string filename = Path.Combine(Globals.CacheDirectory, Tools.ValidFileName(url.Substring(8)));
+			string filename = url.Substring(url.IndexOf("://") + 3);
+			filename = Path.Combine(Globals.CacheDirectory, Tools.ValidFileName(filename));
 		
 			string result = null;
 
@@ -582,9 +673,23 @@ namespace Spludlow.MameAO
 
 		public static void MsAccess(string arguments, string description)
 		{
-			string exeFilename = Path.Combine(Globals.RootDirectory, "access-linker.exe");
-			if (File.Exists(exeFilename) == false)
-				throw new ApplicationException($"Access Linker not found: {exeFilename}, install from here: https://github.com/sam-ludlow/access-linker/releases/latest");
+			string[] locations = new string[] {
+				Path.Combine(Globals.RootDirectory, "access-linker.exe"),
+				Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "access-linker.exe"),
+			};
+
+			string exeFilename = null;
+			foreach (string location in locations)
+			{
+				if (File.Exists(location) == true)
+				{
+					exeFilename = location;
+					break;
+				}
+			}
+
+			if (exeFilename == null)
+				throw new ApplicationException($"Access Linker not found: \"{String.Join(", ", locations)}\". Install from here: https://github.com/sam-ludlow/access-linker/releases/latest");
 
 			Version version = AssemblyName.GetAssemblyName(exeFilename).Version;
 			string localVersion = $"{version.Major}.{version.Minor}";
@@ -690,6 +795,50 @@ namespace Spludlow.MameAO
 
 					writer.WriteLine("</svg>");
 				}
+			}
+		}
+
+		public static void CompressSingleFile(string filename, string zipFilename)
+		{
+			using (FileStream fileStream = new FileStream(zipFilename, FileMode.Create))
+				using (ZipArchive zipArchive = new ZipArchive(fileStream, ZipArchiveMode.Create))
+					zipArchive.CreateEntryFromFile(filename, Path.GetFileName(filename));
+		}
+
+		public static void Compress7Zip(string sourcePath, string targetFilename)
+		{
+			string programFilename = @"C:\Program Files\7-Zip\7z.exe";
+
+			if (File.Exists(programFilename) == false)
+				throw new ApplicationException($"7-Zip Program required: {programFilename}");
+
+			string arguments = $"a -y \"{targetFilename}\" \"{sourcePath}\"";
+
+			Console.WriteLine(arguments);
+
+			ProcessStartInfo startInfo = new ProcessStartInfo(programFilename)
+			{
+				Arguments = arguments,
+				UseShellExecute = false,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+				StandardOutputEncoding = Encoding.UTF8,
+			};
+
+			using (Process process = new Process())
+			{
+				process.StartInfo = startInfo;
+
+				process.OutputDataReceived += new DataReceivedEventHandler((sender, e) => Console.WriteLine(e.Data));
+				process.ErrorDataReceived += new DataReceivedEventHandler((sender, e) => Console.WriteLine(e.Data));
+
+				process.Start();
+				process.BeginOutputReadLine();
+				process.BeginErrorReadLine();
+				process.WaitForExit();
+
+				if (process.ExitCode != 0)
+					throw new ApplicationException($"Z-Zip bad exit code: {process.ExitCode}");
 			}
 		}
 

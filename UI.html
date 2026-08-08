@@ -446,8 +446,15 @@
 				'/about': about,
 			}[_path];
 
-			if (routeFunction !== undefined)
+			if (routeFunction !== undefined) {
 				await routeFunction();
+			} else {
+				// Handle going back to dead pages
+				window.addEventListener('pageshow', () => {
+					if (event.persisted)
+						history.back();
+				});
+			}
 		}
 
 		//
@@ -459,20 +466,19 @@
 
 			const data = await fetchJson('/api/settings');
 
-			let html = '<hr />';
+			let html = '<table><tr><th>Setting</th><th>Value</th><th>Description</th></tr>';
 
 			Object.keys(data.available_options).forEach((key) => {
-				html += `<h2>${key}</h2><p>${data.option_descriptions[key]}</p>`
-				html += `<select id="settings_${key}" onchange="runCommand('.set ${key} ' + this.value)">`;
 
+				let select = `<select id="settings_${key}" onchange="runCommand('.set ${key} ' + this.value)">`;
 				data.available_options[key].forEach((option) => {
-					html += `<option value="${option}">${option}</option>`;
+					select += `<option value="${option}">${option}</option>`;
 				});
+				select += '</select>';
 
-				html += '</select>';
-				html += '<hr />';
+				html += `<tr><td>${key}</td><td>${select}</td><td>${data.option_descriptions[key]}</td></tr>`;
 			});
-
+			html += '</table>';
 
 			let div = document.createElement('div');
 			div.innerHTML = html;
@@ -528,9 +534,9 @@
 
 			div = document.createElement('div');
 			div.style = 'width:100%;';
-			div.innerHTML = '<h2>BitTorrent Client Information</h2><table style="width:100%;">' +
-				'<tr><th>Version</th><th>Start Time</th><th>Time Now</th><th>Running for</th></tr>' +
-				`<tr><td>DOME-BT ${btInfo.version}</td><td>${btInfo.start_time}</td><td>${btInfo.time_now}</td><td>${btInfo.run_time_text}</td></tr>` +
+            div.innerHTML = '<h2>BitTorrent Client Information</h2><table style="width:100%;">' +
+				'<tr><th>Version</th><th>Start Time</th><th>Time Now</th><th>Running for</th><th>Port</th></tr>' +
+				`<tr><td>DOME-BT ${btInfo.version}</td><td>${btInfo.start_time}</td><td>${btInfo.time_now}</td><td>${btInfo.run_time_text}</td><td>${btInfo.port_number}</td></tr>` +
 				'</table>';
 			canvas.appendChild(div);
 
@@ -559,12 +565,15 @@
 
 			columnDefs = [
 				{ heading: 'Name', columnName: 'name' },
+				{ heading: 'Core', columnName: 'core' },
+				{ heading: 'Type', columnName: 'type' },
+				{ heading: 'Version', columnName: 'version' },
 				{ heading: 'State', columnName: 'state' },
-				{ heading: 'File Count', columnName: 'file_count' },
-				{ heading: 'Open Connections', columnName: 'open_connections' },
-				{ heading: 'Peers Available', columnName: 'peers_available' },
-				{ heading: 'Peers Leechs', columnName: 'peers_leechs' },
-				{ heading: 'Peers Seeds', columnName: 'peers_seeds' },
+				{ heading: 'Files', columnName: 'file_count' },
+				{ heading: 'Connections', columnName: 'open_connections' },
+				{ heading: 'Available', columnName: 'peers_available' },
+				{ heading: 'Leechs', columnName: 'peers_leechs' },
+				{ heading: 'Seeds', columnName: 'peers_seeds' },
 				{ heading: 'Downloaded', columnName: 'bytes_received_text' },
 				{ heading: 'Uploaded', columnName: 'bytes_sent_text' },
 			];
@@ -580,6 +589,10 @@
 					return;
 
 				switch (columnDef.columnName) {
+
+					case 'name':
+						cell.innerHTML = `<a href="${result.magnet}" target="_blank">${value}</a>`;
+						break;
 
 					case 'state':
 						cell.innerHTML = `<a href="${_info.bit_torrent_url}/api/files?hash=${result.hash}&priority=Highest" target="_blank">${value}</a>`;
@@ -662,40 +675,6 @@
 				cell.innerHTML = value;
 			});
 
-			canvas.appendChild(table);
-
-			// Magnet Links
-
-			div = document.createElement('div');
-			div.innerHTML = '<hr /><h2>Magnet Links</h2>';
-			canvas.appendChild(div);
-
-			columnDefs = [
-				{ heading: 'Asset Type', columnName: 'type' },
-				{ heading: 'Name / Link', columnName: 'name' },
-				{ heading: 'Version', columnName: 'version' },
-				{ heading: 'Available', columnName: 'torrent_available' },
-			];
-
-			table = document.createElement('table');
-
-			buildTable(columnDefs, btInfo.magnets, table, (columnDef, result, resultIndex, row, cell) => {
-
-				const value = result[columnDef.columnName];
-
-				if (value === undefined)
-					return;
-
-				switch (columnDef.columnName) {
-
-					case 'name':
-						cell.innerHTML = `<a href="${result.magnet_link}" target="_blank">${value}</a>`;
-						break;
-					default:
-						cell.innerHTML = value;
-						break;
-				}
-			});
 			canvas.appendChild(table);
 
 			// Restart & Stop
@@ -1062,12 +1041,12 @@
 				switch (columnDef.columnName) {
 
 					case 'version':
-						cell.innerHTML = `<a onclick="runCommand('.${result.version}')" href="javascript:void(0);">${result.version}</a>`;
+						cell.innerHTML = `<a href="#" onclick="runCommand('.${result.version}'); return false;">${result.version}</a>`;
 						break;
 
 					case 'sta_machine':
 						if (result.sta_machine !== undefined)
-							cell.innerHTML = `<a onclick="runCommand('.${result.version} ${result.sta_machine}')" href="javascript:void(0);">${result.sta_machine}</a>`;
+							cell.innerHTML = `<a href="#" onclick="runCommand('.${result.version} ${result.sta_machine}'); return false;">${result.sta_machine}</a>`;
 						break;
 
 					default:
@@ -1107,7 +1086,7 @@
 
 				report_types.results.filter(report_type => report_type.group === report_group.key).forEach(report_type => {
 
-					html += `<tr><td>${report_type.key}</td><td><a href="javascript:void(0);" onclick="runCommand('.report ${report_type.code}')" >${report_type.code}</a></td><td>${report_type.text}</td><td>${report_type.description}</td></tr>`;
+					html += `<tr><td>${report_type.key}</td><td><a href="#" onclick="runCommand('.report ${report_type.code}'); return false;" >${report_type.code}</a></td><td>${report_type.text}</td><td>${report_type.description}</td></tr>`;
 				});
 
 				html += '</table>';
@@ -1177,7 +1156,7 @@
 			html += '</select>';
 			html += '<button id="commandButton" type="submit" onclick="sqlReportsExecute(commandDatabase.value, commandText.value); return false;">Query</button>';
 			html += '<input type="checkbox" id="commandSaveReport">Save Report</input>';
-			html += '<hr /><textarea id="commandText" rows="12" style="width: 100%; box-sizing: border-box;"></textarea>';
+			html += '<hr /><textarea id="commandText" rows="8" style="width: 100%; box-sizing: border-box;"></textarea>';
 			html += '<hr /><div id="commandResult"></div>';
 
 			const div = document.createElement('div');
@@ -1343,21 +1322,13 @@
 		//
 		const genreMachines = async () => {
 
-			const canvas = getCanvas();
-
 			let parts = _pathParts[3].split('/');
 			const genre_name = decodeURIComponent(parts[parts.length - 1]);
 
 			const genres = await fetchJson(`/api/genres?genre_name=${encodeURIComponent(genre_name)}`);
 			const genre_id = genres.results[0].genre_id;
 
-			let profileKey = `genre-${genre_id}`;
-
-			const machinesData = await (await fetch(`${_baseUrl}/api/machines?profile=${profileKey}&offset=${_parameters.offset}&search=${_parameters.search}`)).json();
-
-			profileKey = 'everything';
-
-			showMachines(canvas, machinesData, profileKey);
+			await showMachines(`genre-${genre_id}`);
 		}
 
 		//
@@ -1365,51 +1336,230 @@
 		//
 		const machines = async () => {
 
-			const canvas = getCanvas();
-
 			let parts = _pathParts[2].split('/');
-			const profileKey = parts[parts.length - 1];
+			const profile = parts[parts.length - 1];
 
-			const machinesData = await fetchJson(`/api/machines?profile=${profileKey}&offset=${_parameters.offset}&search=${_parameters.search}&sortColumn=${_parameters.sortColumn || ''}&sortDirection=${_parameters.sortDirection || ''}`);
-
-			showMachines(canvas, machinesData, profileKey);
+			await showMachines(profile);
 		}
 
 		//
 		// Show Machines
 		//
-		const showMachines = (canvas, machinesData, profileKey) => {
+		const showMachines = async (profile) => {
+
+			const [machinesData, filtersData] = await Promise.all([
+				fetchJson(makeParameters('/api/machines', { ..._parameters, profile })),
+				fetchJson('/api/filters')
+			]);
+
+			if (profile.startsWith('genre'))
+				profile = 'everything';
+
+			const canvas = getCanvas();
+
+			let body;
+
+			const target = (result) => result.ao_softwarelist_count > 0 ?
+				`href="${_baseUrl}/machines/${profile}/${result.name}"` : `href="#" onclick="runCommand('${result.name}@${_info.core_name}'); return false;"`;
+
+			if (_parameters.view === 'grid') {
+
+				body = document.createElement('div');
+				body.className = 'card-grid';
+
+				machinesData.results.forEach((result) => {
+
+					const item = document.createElement('div');
+					item.className = `card-${result.ao_status}`;
+
+					const card = `
+						<div class="card-body">
+							<div class="card-name">
+								<a class="card-link" href="https://data.spludlow.co.uk/${_info.core_name}/machine/${result.name}" target="_blank">${result.name}</a>
+								<div>
+									<input type="checkbox" class="fav-checkbox" id="fav_${result.name}" onclick="changeFavoriteMachine(this.id)" ${result.favorite ? 'checked' : ''} />
+									<label for="fav_${result.name}" class="star"></label>
+								</div>
+							</div>
+							<div class="card-thumb">
+								<a ${target(result)} class="card-link">
+									<img src="https://data.spludlow.co.uk/${_info.core_name}/machine/${result.name}.jpg" alt="${result.description}" loading="lazy" />
+								</a>
+							</div>
+							<div>${htmlEncode(result.description)}</div>
+							<div class="card-year">${result.year}</div>
+							<div>${htmlEncode(result.manufacturer)}</div>
+						</div>
+					`;
+
+					item.innerHTML = card;
+
+					const img = item.querySelector('.card-thumb img');
+					img.addEventListener('error', () => {
+						img.src = 'data:image/svg+xml;base64,' + btoa(`
+							<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+								<rect width="128" height="128" fill="#262626"/>
+								<text x="50%" y="50%" font-size="18" fill="#fff" text-anchor="middle" alignment-baseline="central">
+									no image
+								</text>
+							</svg>
+						`);
+						img.alt = 'Image not available';
+					});
+
+					body.appendChild(item);
+				});
+
+			} else {
+
+				body = document.createElement('table');
+				body.style = 'width:100%;';
+
+				const columnDefs = [
+					{ heading: 'name', columnName: 'name' },
+					{ heading: '', columnName: 'favorite' },
+					{ heading: 'description', columnName: 'description' },
+					{ heading: 'status', columnName: 'ao_status' },
+					{ heading: 'year', columnName: 'year' },
+					{ heading: 'manufacturer', columnName: 'manufacturer' },
+					{ heading: 'roms', columnName: 'ao_rom_count' },
+					{ heading: 'disks', columnName: 'ao_disk_count' },
+					{ heading: 'lists', columnName: 'ao_softwarelist_count' },
+					{ heading: 'cloneof', columnName: 'cloneof' },
+					{ heading: 'romof', columnName: 'romof' },
+				];
+
+				buildTable(columnDefs, machinesData.results, body, (columnDef, result, resultIndex, row, cell) => {
+
+					const value = result[columnDef.columnName];
+
+					if (value === undefined)
+						return;
+
+					cell.innerHTML = value;
+
+					switch (columnDef.columnName) {
+						case 'name':
+							cell.innerHTML = `<a ${target(result)}>${result.name}</a>`;
+							break;
+
+						case 'favorite':
+							cell.innerHTML = `
+								<div>
+									<input type="checkbox" class="fav-checkbox" id="fav_${result.name}" onclick="changeFavoriteMachine(this.id)" ${result.favorite ? 'checked' : ''} />
+									<label for="fav_${result.name}" class="star"></label>
+								</div>`;
+							break;
+
+						case 'description':
+							cell.innerHTML = `<a href="https://data.spludlow.co.uk/${_info.core_name}/machine/${result.name}" target="_blank">${htmlEncode(result.description) }</a>`;
+							break;
+
+						case 'ao_status':
+							cell.className = result.ao_status;
+							break;
+
+						case 'cloneof':
+							cell.innerHTML = `<a href="/machines/everything?search=${value}">${value}</a>`;
+							break;
+
+						case 'romof':
+							cell.innerHTML = `<a href="/machines/everything?search=${value}">${value}</a>`;
+							break;
+
+						case 'manufacturer':
+							cell.innerHTML = htmlEncode(value);
+							break;
+
+					}
+
+					if (cell.innerHTML === '0')
+						cell.innerHTML = '';
+				});
+
+			}
 
 			const navHtml = navigateHtml(machinesData);
 
-			let html = '';
-
-			html += `<input id="inputText" type="text" value="${_parameters.search}" style="width:480px;" />`;
-			html += '<button type="submit" onclick="searchButton(); return false;">Search</button>';
-			html += '&nbsp;&nbsp;';
-			html += 'Sort by: <select id="sortSelect" onchange="changeSortMachines()">';
-			html += '<option value="description">Name</option>';
-			html += '<option value="year">Year</option>';
-			html += '<option value="manufacturer">Manufacturer</option>';
-			html += '<option value="name">ROM Name</option>';
-			html += '</select>';
-			html += '&nbsp;';
-			html += '<select id="sortDirection" onchange="changeSortMachines()">';
-			html += '<option value="asc">Ascending</option>';
-			html += '<option value="desc">Descending</option>';
-			html += '</select>';
-			html += '<hr />';
-			html += `<nav>${navHtml}</nav>`;
-			html += '<div id="results"></div>';
-			html += `<nav>${navHtml}</nav>`;
-
-			const div = document.createElement('div');
-			div.innerHTML = html;
+			let div = document.createElement('div');
+			div.innerHTML = `
+				<div class="toolbar-input">
+					<input id="inputText" type="text" placeholder="machine name & description" />
+					<input id="manufacturerText" type="text" placeholder="manufacturer" />
+					<button type="submit" onclick="searchMachine(); return false;">Search</button>
+				</div>
+				<div class="toolbar" id="filters">
+				</div>
+				<hr />
+				<nav>${navHtml}</nav>
+				<hr />
+				<div id="results"></div>
+				<hr />
+				<nav>${navHtml}</nav>
+			`;
 			canvas.appendChild(div);
+
+			const filtersDiv = document.getElementById("filters");
+
+			Object.keys(filtersData.machine).forEach((name) => {
+				const filterDiv = document.createElement('div');
+				filterDiv.className = 'checkbox-group';
+				filterDiv.innerHTML = `${filtersData.machine[name].values.map(value =>
+					`<label><input id="${name}-${value}" type="${filtersData.machine[name].type}" name="${name}" value="${value}" onchange="changeFilter('${name}', this);">${value}</label>`
+				).join('')}`;
+
+				filtersDiv.appendChild(filterDiv);
+			});
+
+			div = document.createElement('div');
+			div.className = 'checkbox-group';
+			div.innerHTML = `
+					<label><input id="order-description" type="radio" name="order" value="description" onchange="changeOrder(this);">description</label>
+					<label><input id="order-year" type="radio" name="order" value="year" onchange="changeOrder(this);">year</label>
+					<label><input id="sort-asc" type="radio" name="sort" value="asc" onchange="changeSort(this);">asc</label>
+					<label><input id="sort-desc" type="radio" name="sort" value="desc" onchange="changeSort(this);">desc</label>`;
+			filtersDiv.appendChild(div);
+
+			div = document.createElement('div');
+			div.className = 'checkbox-group';
+			div.innerHTML = `
+						<label><input id="view-grid" type="radio" name="view" value="grid" onchange="changeView(this);">grid</label>
+						<label><input id="view-list" type="radio" name="view" value="list" onchange="changeView(this);">list</label>`;
+			filtersDiv.appendChild(div);
+
+			document.getElementById("inputText").value = _parameters.search;
+			document.getElementById("manufacturerText").value = _parameters.manufacturer;
+
+			document.querySelectorAll('input[name="status"]').forEach(cb => cb.checked = _parameters.status.includes(cb.value));
+			document.querySelectorAll('input[name="display"]').forEach(cb => cb.checked = _parameters.display.includes(cb.value));
+			document.querySelectorAll('input[name="control"]').forEach(cb => cb.checked = _parameters.control.includes(cb.value));
+			document.querySelectorAll('input[name="players"]').forEach(cb => cb.checked = _parameters.players.includes(cb.value));
+
+			if (_parameters.mechanical === null)
+				document.getElementById("mechanical-all").checked = true;
+			else
+				if (_parameters.mechanical === true)
+					document.getElementById("mechanical-mechanical").checked = true;
+				else
+					document.getElementById("mechanical-electronic").checked = true;
+
+			if (_parameters.clone === null)
+				document.getElementById("clone-all").checked = true;
+			else
+				if (_parameters.clone === true)
+					document.getElementById("clone-clone").checked = true;
+				else
+					document.getElementById("clone-parent").checked = true;
+
+			document.getElementById(`order-${_parameters.order}`).checked = true;
+			document.getElementById(`sort-${_parameters.sort}`).checked = true;
+			document.getElementById(`view-${_parameters.view}`).checked = true;
 
 			const results = document.getElementById('results');
 
-			if (machinesData.results.length === 0) {
+			results.appendChild(body);
+
+			if (machinesData.results.length === 0)
 				results.insertAdjacentHTML('beforeend', `<p><b>No results - try looking in <a href="/machines/everything?search=${_parameters.search}">Everything</a></b></p>`);
 			} else {
 				// Create grid container
@@ -1460,43 +1610,53 @@
 				results.appendChild(grid);
 			}
 
-			const inputText = document.getElementById('inputText');
-			inputText.focus();
-			
-			// Set the selected sort values
-			document.getElementById('sortSelect').value = _parameters.sortColumn || 'name';
-			document.getElementById('sortDirection').value = _parameters.sortDirection || 'asc';
+			document.getElementById('inputText').focus();
 		}
-		
-		const changeSortMachines = () => {
-			const sortColumn = document.getElementById('sortSelect').value;
-			const sortDirection = document.getElementById('sortDirection').value;
-			
-			const params = new URLSearchParams();
-			params.set('offset', 0); // Reset to first page when sorting
-			params.set('search', _parameters.search);
-			params.set('sortColumn', sortColumn);
-			params.set('sortDirection', sortDirection);
-			
-			window.location.href = `${_path}?${params.toString()}`;
-		}
-		
-		const changeFavoriteMachine = async (checkBoxId, resultIndex) => {
+
+		const changeFavoriteMachine = async (checkBoxId) => {
 			const checkBox = document.getElementById(checkBoxId);
-
 			const name = checkBoxId.substring(4);
-
 			const command = checkBox.checked ? ".favm" : ".favmx";
-
 			await runCommand(`${command} ${name}`);
+		}
+		const searchMachine = () => {
+			_parameters['search'] = document.getElementById('inputText').value;
+			_parameters['manufacturer'] = document.getElementById('manufacturerText').value;
+			_parameters['offset'] = 0;
+			document.location = makeParameters(_path, _parameters);
+		}
 
-			const row = checkBox.parentElement.parentElement;
+		const changeFilter = (name, input) => {
+			switch (name) {
+				case 'status':
+				case 'display':
+				case 'control':
+				case 'players':
+					_parameters[name] = Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map(item => item.value);
+					break;
 
-			const cell = row.cells[1];
-			if (checkBox.checked === false)
-				cell.className = '';
-			else
-				cell.className = (resultIndex % 2) ? 'fav-odd' : 'fav-even';
+				case 'clone':
+				case 'mechanical':
+					_parameters[name] = input.value === 'all' ? null : input.value === name;
+					break;
+			}
+			_parameters['offset'] = 0;
+			document.location = makeParameters(_path, _parameters);
+		}
+
+		const changeOrder = (input) => {
+			_parameters.order = input.value;
+			_parameters['offset'] = 0;
+			document.location = makeParameters(_path, _parameters);
+		}
+		const changeSort = (input) => {
+			_parameters.sort = input.value;
+			_parameters['offset'] = 0;
+			document.location = makeParameters(_path, _parameters);
+		}
+		const changeView = (input) => {
+			_parameters.view = input.value;
+			document.location = makeParameters(_path, _parameters);
 		}
 
 		//
@@ -1504,137 +1664,208 @@
 		//
 		const machine = async (machineData) => {
 
-			const canvas = getCanvas();
-
 			let parts = _pathParts[4].split('/');
 			const softwarelist = parts[parts.length - 1];
 
-			const softwareData = await fetchJson(`/api/software?softwarelist=${softwarelist}&offset=${_parameters.offset}&search=${_parameters.search}&favorites_machine=${machineData.name}&sortColumn=${_parameters.sortColumn || ''}&sortDirection=${_parameters.sortDirection || ''}`);
+			const softwareData = await fetchJson(makeParameters('/api/software', { ..._parameters, softwarelist, favorites_machine: machineData.name }));
+
+			const canvas = getCanvas();
+
+			let body;
+
+			if (_parameters.view === 'grid') {
+
+				body = document.createElement('div');
+				body.className = 'card-grid';
+
+				softwareData.results.forEach((result) => {
+
+					const item = document.createElement('div');
+					item.className = `card-${result.supported}`;
+
+					const card = `
+						<div class="card-body">
+							<div class="card-name">
+								<a class="card-link" href="https://data.spludlow.co.uk/${_info.core_name}/software/${result.softwarelist_name}/${result.name}" target="_blank">${result.name}</a>
+								<div>
+									<input type="checkbox" class="fav-checkbox" id="fav_${result.name}" onclick="changeFavoriteSoftware(this.id, '${machineData.name}', '${result.softwarelist_name}')" ${result.favorite ? 'checked' : ''} />
+									<label for="fav_${result.name}" class="star"></label>
+								</div>
+							</div>
+							<div class="card-thumb">
+								<a href="#" onclick="runCommand('${machineData.name}@${_info.core_name} ${result.name}@${result.softwarelist_name}'); return false;" class="card-link">
+									<img src="https://data.spludlow.co.uk/${_info.core_name}/software/${result.softwarelist_name}/${result.name}.jpg" alt="${result.description}" loading="lazy" />
+								</a>
+							</div>
+							<div>${htmlEncode(result.description)}</div>
+							<div class="card-year">${result.year}</div>
+							<div>${htmlEncode(result.publisher)}</div>
+						</div>
+					`;
+
+					item.innerHTML = card;
+
+					const img = item.querySelector('.card-thumb img');
+					img.addEventListener('error', () => {
+						img.src = 'data:image/svg+xml;base64,' + btoa(`
+							<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+								<rect width="128" height="128" fill="#262626"/>
+								<text x="50%" y="50%" font-size="18" fill="#fff" text-anchor="middle" alignment-baseline="central">
+									no image
+								</text>
+							</svg>
+						`);
+						img.alt = 'Image not available';
+					});
+
+					body.appendChild(item);
+				});
+
+
+			} else {
+
+				const columnDefs = [
+					{ heading: 'name', columnName: 'name' },
+					{ heading: '', columnName: 'favorite' },
+					{ heading: 'description', columnName: 'description' },
+					{ heading: 'supported', columnName: 'supported' },
+					{ heading: 'year', columnName: 'year' },
+					{ heading: 'publisher', columnName: 'publisher' },
+					{ heading: 'cloneof', columnName: 'cloneof' },
+				];
+
+				if (_path.endsWith('/@fav') === true)
+					columnDefs.push({ heading: 'software list', columnName: 'softwarelist_name' });
+
+				body = document.createElement('table');
+				body.style = 'width:100%;';
+
+				buildTable(columnDefs, softwareData.results, body, (columnDef, result, resultIndex, row, cell) => {
+
+					switch (columnDef.columnName) {
+						case 'name':
+							cell.innerHTML = `<a id="${result.name}" href="#" onclick="runCommand('${machineData.name}@${_info.core_name} ${result.name}@${result.softwarelist_name}'); return false;">${result.name}</a>`;
+							break;
+
+						case 'favorite':
+							cell.innerHTML = `
+								<div>
+									<input type="checkbox" class="fav-checkbox" id="fav_${result.name}" onclick="changeFavoriteSoftware(this.id, '${machineData.name}', '${result.softwarelist_name}')" ${result.favorite ? 'checked' : ''} />
+									<label for="fav_${result.name}" class="star"></label>
+								</div>`;
+							break;
+
+						case 'description':
+							cell.innerHTML = `<a href="https://data.spludlow.co.uk/${_info.core_name}/software/${result.softwarelist_name}/${result.name}" target="_blank">${result.description}</a>`;
+							break;
+
+						case 'publisher':
+							cell.innerHTML = htmlEncode(result[columnDef.columnName]);
+							break;
+
+						case 'supported':
+							cell.className = result.supported;
+							cell.innerHTML = result.supported;
+							break;
+
+						default:
+							cell.innerHTML = result[columnDef.columnName] || '';
+							break;
+					}
+				});
+			}
 
 			const navHtml = navigateHtml(softwareData);
 
-			let html = '';
-
-			html += `<input id="inputText" type="text" value="${_parameters.search}" style="width:480px;" />`;
-			html += '<button type="submit" onclick="searchButton(); return false;">Search</button>';
-			html += '<hr />';
-			html += `<nav>${navHtml}</nav>`;
-			html += '<div id="results"></div>';
-			html += `<nav>${navHtml}</nav>`;
+			let html = `
+				<div class="toolbar-input">
+					<input id="inputText" type="text" placeholder="software name & description" />
+					<input id="publisherText" type="text" placeholder="publisher" />
+					<button type="submit" onclick="searchSoftware(); return false;">Search</button>
+				</div>
+				<div class="toolbar">
+					<div class="checkbox-group">
+						<label><input id="order-description" type="radio" name="order" value="description" onchange="changeOrder(this);">description</label>
+						<label><input id="order-year" type="radio" name="order" value="year" onchange="changeOrder(this);">year</label>
+						<label><input id="sort-asc" type="radio" name="sort" value="asc" onchange="changeSort(this);">asc</label>
+						<label><input id="sort-desc" type="radio" name="sort" value="desc" onchange="changeSort(this);">desc</label>
+					</div>
+					<div class="checkbox-group">
+						<label><input id="view-grid" type="radio" name="view" value="grid" onchange="changeView(this);">grid</label>
+						<label><input id="view-list" type="radio" name="view" value="list" onchange="changeView(this);">list</label>
+					</div>
+				</div>
+				<hr />
+				<nav>${navHtml}</nav>
+				<hr />
+				<div id="results"></div>
+				<hr />
+				<nav>${navHtml}</nav>
+			`;
 
 			const div = document.createElement('div');
 			div.innerHTML = html;
 			canvas.appendChild(div);
 
+			document.getElementById("inputText").value = _parameters.search;
+			document.getElementById("publisherText").value = _parameters.publisher;
+			document.getElementById(`order-${_parameters.order}`).checked = true;
+			document.getElementById(`sort-${_parameters.sort}`).checked = true;
+			document.getElementById(`view-${_parameters.view}`).checked = true;
+
 			const results = document.getElementById('results');
 
-			if (softwareData.results.length === 0) {
-				results.insertAdjacentHTML('beforeend', `<p><b>No results</b></p>`);
-			} else {
-				// Create grid container
-				const grid = document.createElement('div');
-				grid.className = 'game-grid';
-
-				softwareData.results.forEach((result, index) => {
-					const card = document.createElement('div');
-					card.className = 'game-card';
-
-					const clickAction = `runCommand('${machineData.name}@${_info.core_name} ${result.name}@${result.softwarelist_name}')`;
-
-					card.innerHTML = `
-						<div class="game-card-image" onclick="${clickAction}">
-							<img src="${result.ao_image}" loading="lazy" alt="${result.description || result.name}" />
-						</div>
-						<div class="game-card-info">
-							<div class="game-card-title" title="${result.description || result.name}">${result.description || result.name}</div>
-							<div class="game-card-row"><span class="game-card-label">Name:</span><span class="game-card-value">${result.name}</span></div>
-							${result.year ? `<div class="game-card-row"><span class="game-card-label">Year:</span><span class="game-card-value">${result.year}</span></div>` : ''}
-							${result.publisher ? `<div class="game-card-row"><span class="game-card-label">Pub:</span><span class="game-card-value" title="${result.publisher}">${result.publisher}</span></div>` : ''}
-							${result.cloneof ? `<div class="game-card-row"><span class="game-card-label">Clone:</span><span class="game-card-value">${result.cloneof}</span></div>` : ''}
-							${result.supported ? `<div class="game-card-row"><span class="game-card-label">Support:</span><span class="game-card-value">${result.supported}</span></div>` : ''}
-							${_path.endsWith('/@fav') && result.softwarelist_name ? `<div class="game-card-row"><span class="game-card-label">List:</span><span class="game-card-value">${result.softwarelist_name}</span></div>` : ''}
-							<div class="game-card-row">
-								<span class="game-card-label">Fav:</span>
-								<input type="checkbox" id="fav_${result.name}" onclick="changeFavoriteSoftware(this.id, '${machineData.name}', '${result.softwarelist_name}', ${index}); event.stopPropagation();" ${result.favorite ? 'checked' : ''} />
-							</div>
-						</div>
-					`;
-
-					grid.appendChild(card);
-				});
-
-				results.appendChild(grid);
-			}
+			results.appendChild(body);
 
 			const inputText = document.getElementById('inputText');
 			inputText.focus();
 		}
-		const changeFavoriteSoftware = async (checkBoxId, machineName, listName, resultIndex) => {
+		const changeFavoriteSoftware = async (checkBoxId, machineName, listName) => {
 			const checkBox = document.getElementById(checkBoxId);
-
 			const softwareName = checkBoxId.substring(4);
-
 			const command = checkBox.checked ? ".favs" : ".favsx";
-
 			await runCommand(`${command} ${machineName} ${listName} ${softwareName}`);
-
-			const row = checkBox.parentElement.parentElement;
-
-			const cell = row.cells[1];
-			if (checkBox.checked === false)
-				cell.className = '';
-			else
-				cell.className = (resultIndex % 2) ? 'fav-odd' : 'fav-even';
 		}
 
-		const searchButton = async () => {
-
-			const inputText = document.getElementById('inputText');
-
-			document.location = `${_path}?search=${encodeURIComponent(inputText.value)}`;
-
+		const searchSoftware = async () => {
+			_parameters['search'] = document.getElementById('inputText').value;
+			_parameters['publisher'] = document.getElementById('publisherText').value;
+			_parameters['offset'] = 0;
+			document.location = makeParameters(_path, _parameters);
 		}
+
+		const goLocationUrl = (offset) => makeParameters(_path, { ..._parameters, offset });
 
 		const navigateHtml = (data) => {
 
-			const limit = 100;
+			const limit = data.limit;
+			const offset = data.offset;
+			const total = data.total;
+			const count = data.count;
 
-			const totalPages = Math.ceil(data.total / data.limit);
-			const currentPage = (data.offset / data.limit) + 1;
+			let nav = '<div class="toolbar">';
 
-			// Build URL with all current parameters
-			const buildNavUrl = (offset) => {
-				const params = new URLSearchParams();
-				params.set('offset', offset);
-				params.set('search', _parameters.search);
-				if (_parameters.sortColumn) {
-					params.set('sortColumn', _parameters.sortColumn);
-				}
-				if (_parameters.sortDirection) {
-					params.set('sortDirection', _parameters.sortDirection);
-				}
-				return `${_path}?${params.toString()}`;
-			};
+			let prevOffset = offset - limit;
+			nav += prevOffset >= 0 ?
+				`<a href="${goLocationUrl(prevOffset)}"><img class="arrow" src="/images/back.svg" alt="Navigate back a page" /></a> &bull;` :
+				'<div><img class="arrow" src="/images/back.svg" alt="On first page" /></div> &bull;';
 
-			const firstPage = buildNavUrl(0);
-			const lastPage = buildNavUrl((totalPages - 1) * limit);
-			const prevPage = buildNavUrl(Math.max(0, _parameters.offset - limit));
-			const nextPage = buildNavUrl(Math.min((totalPages - 1) * limit, _parameters.offset + limit));
+			let nextOffset = offset + limit;
+			nav += nextOffset < total ?
+				`<a href="${goLocationUrl(nextOffset)}"><img class="arrow" src="/images/next.svg" alt="Navigate to next page" /></a> &bull;` :
+				'<div><img class="arrow" src="/images/next.svg" alt="On last page" /></div> &bull;';
 
-			const buttonStyle = 'display:inline-block;min-width:40px;text-align:center;padding:6px 10px;border:2px solid #ccc;border-radius:8px;text-decoration:none;color:#333;background-color:#f5f5f5;';
-			const currentPageStyle = 'display:inline-block;min-width:60px;text-align:center;padding:6px 10px;border:2px solid #4a90e2;border-radius:8px;background-color:#4a90e2;color:white;font-weight:bold;';
+			let lastOffset = Math.floor(total / limit) * limit;
+			if (total > 0 && total % limit === 0)
+				lastOffset -= limit;
 
-			return `<div style="margin-top:15px;margin-bottom:15px;"><a href="${firstPage}" title="First page" style="${buttonStyle}">&lt;&lt;</a>` +
-				'&nbsp;' +
-				`<a href="${prevPage}" title="Previous page" style="${buttonStyle}">&lt;</a>` +
-				'&nbsp;' +
-				`<span style="${currentPageStyle}">${currentPage} / ${totalPages}</span>` +
-				'&nbsp;' +
-				`<a href="${nextPage}" title="Next page" style="${buttonStyle}">&gt;</a>` +
-				'&nbsp;' +
-				`<a href="${lastPage}" title="Last page" style="${buttonStyle}">&gt;&gt;</a>` +
-				'&nbsp; &nbsp;' +
-				`<span style="color:#666;">(total: ${data.total} - viewing: ${data.count})</span></div>`;
+			nav += `<div>page <a href="${goLocationUrl(0)}">${offset / limit + 1}</a> ` +
+				`of <a href="${goLocationUrl(lastOffset)}">${Math.ceil(total / limit)}</a></div> &bull;` +
+				`<div>view ${count} of ${total}</div>`;
+
+			nav += '</div>';
+
+			return nav;
 		}
 
 		//
@@ -1715,51 +1946,99 @@
 			});
 		}
 
-		const sortTable = (table, columnIndex, columnName) => {
-			// Determine current sort direction from URL parameters
-			let currentDirection = _parameters.sortDirection || 'none';
-			let currentColumn = _parameters.sortColumn || '';
-			
-			// If clicking a different column, default to ascending
-			// If clicking the same column, toggle direction
-			let newDirection = 'asc';
-			if (currentColumn === columnName) {
-				newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
-			}
-			
-			// Build new URL with sort parameters
-			const params = new URLSearchParams();
-			params.set('offset', _parameters.offset);
-			params.set('search', _parameters.search);
-			params.set('sortColumn', columnName);
-			params.set('sortDirection', newDirection);
-			
-			// Navigate to new URL with sort parameters
-			window.location.href = `${_path}?${params.toString()}`;
+		const _defaultParamters = {
+			offset: 0,
+			search: '',
+			manufacturer: '',
+			publisher: '',
+			status: [],
+			display: [],
+			control: [],
+			players: [],
+			mechanical: null,
+			clone: null,
+			order: 'description',
+			sort: 'asc',
+			view: 'grid',
+		};
+		const _machine_statuses = [
+			'good',
+			'imperfect',
+			'preliminary',
+			'bad',
+		];
+
+		const makeParameters = (url, parameters) => {
+			const partKeys = Object.keys(parameters).filter((key) => {
+				if (Array.isArray(parameters[key]))
+					return parameters[key].length > 0;
+				else
+					return parameters[key] !== _defaultParamters[key];
+			});
+
+			const parts = [];
+
+			partKeys.forEach(key => {
+				const value = parameters[key];
+				if (Array.isArray(value))
+					value.forEach(itemValue => parts.push(`${key}=${encodeURIComponent(itemValue)}`));
+				else
+					parts.push(`${key}=${encodeURIComponent(value)}`);
+			});
+
+			if (parts.length === 0)
+				return url;
+			else
+				return url + '?' + parts.join('&');
 		}
 
 		const getRequestInfo = () => {
 
-			_baseUrl = window.location.origin;
-
-			_parameters = {};
+			_parameters = JSON.parse(JSON.stringify(_defaultParamters));
 
 			if (window.location.href.includes('?')) {
-
 				const parts = window.location.href.split('?')[1].split('&');
 				parts.forEach((part) => {
 					const pair = part.split('=');
-					_parameters[pair[0]] = decodeURIComponent(pair[1]);
+					const key = pair[0];
+					const value = decodeURIComponent(pair[1]);
+
+					switch (key) {
+						case 'offset':
+							_parameters[key] = parseInt(value, 10);
+							break;
+
+						case 'search':
+						case 'manufacturer':
+						case 'publisher':
+						case 'order':
+						case 'sort':
+						case 'view':
+							_parameters[key] = value;
+							break;
+
+						case 'status':
+							if (_machine_statuses.includes(value) && !_parameters.status.includes(value))
+								_parameters.status.push(value);
+							break;
+
+						case 'display':
+						case 'control':
+						case 'players':
+							if (!_parameters[key].includes(value))
+								_parameters[key].push(value);
+							break;
+
+						case 'mechanical':
+						case 'clone':
+							if (['true', 'false'].includes(value))
+								_parameters[key] = value === 'true';
+							break;
+					}
 				});
 			}
 
-			if (_parameters['offset'] === undefined)
-				_parameters['offset'] = 0;
-			else
-				_parameters['offset'] = parseInt(_parameters['offset'], 10);
-
-			if (_parameters['search'] === undefined)
-				_parameters['search'] = '';
+			_baseUrl = window.location.origin;
 
 			// Set default sort to description ascending if not specified
 			if (_parameters['sortColumn'] === undefined)
@@ -1787,7 +2066,7 @@
 			}
 		}
 
-		const htmlEncode = (html) => html.replace(/[&<>'"]/g,
+		const htmlEncode = (html = '') => html.replace(/[&<>'"]/g,
 			tag => ({
 				'&': '&amp;',
 				'<': '&lt;',
@@ -1809,6 +2088,7 @@
 
 			displayMenuWalk(_rootMenu);
 
+			// Shuffle down the menu on the left
 			if (_currentMenu && _currentMenu.menu && _currentMenu.menu[0].href)
 				document.location = `${_baseUrl}${_currentMenu.menu[0].href}`;
 		}
@@ -1819,9 +2099,10 @@
 			const heading = document.getElementById('heading');
 
 			const table = document.createElement('table');
-			table.style = "width: 100%;";
+			table.className = 'nav';
 
 			const row = document.createElement('tr');
+			row.className = 'nav';
 
 			let found;
 
@@ -1868,16 +2149,15 @@
 
 </head>
 <body>
-
-	<div>
-		<a style="float:left;" href="/"><img src="https://mame.spludlow.co.uk/snap/mame-ao-logo.png" /></a>
+	<div class="header">
+		<a href="/"><img src="/images/logo.svg" width="120" height="64" alt="mame-ao logo"></a>
 		<h1 id="heading"></h1>
 	</div>
 
 	<nav id="nav">
 	</nav>
 
-	<hr />
+	<br />
 
 	<div id="error"></div>
 
