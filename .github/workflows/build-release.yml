@@ -14,6 +14,8 @@ env:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
 
@@ -96,4 +98,4 @@ jobs:
           name: ${{ env.TAG_NAME }}
           body: ${{ github.event.inputs.release_description }}
           artifacts: ${{ env.APP_NAME }}-${{ env.TAG_NAME }}.zip,${{ env.APP_NAME }}-${{ env.TAG_NAME }}_x64.zip
-          token: ${{ secrets.ACTIONS_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
