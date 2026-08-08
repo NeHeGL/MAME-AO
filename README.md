@@ -1,6 +1,13 @@
 # mame-ao
 Easiest way to use MAME & HBMAME. Automatic download and setup of all files from GitHub, BitTorrent, and archive.org on the fly.
 
+**Enhanced Fork** - This is a fork of [Sam Ludlow's MAME-AO](https://github.com/sam-ludlow/mame-ao), kept in sync with his upstream releases, with a small set of additional console-only features on top:
+- 🎨 **Colorized Console Output** - ANSI color-coded startup banner and console output
+- 📖 **Built-in Help System** - `.help` command with a comprehensive, color-coded command reference
+- ⚡ **Enhanced Asset Commands** - `.place` to download & place assets for one machine/software, `.update` to download & place all missing assets plus artwork/samples in one shot
+
+This fork previously carried its own customized web UI (grid/panel view, column sorting, arrow-key navigation). That's been dropped in favor of upstream's own web UI, which now covers the same ground (grid/list view toggle, ascending/descending sorting) - no need to maintain a separate one.
+
 ![MAME-AO UI](https://raw.githubusercontent.com/sam-ludlow/mame-ao/main/images/mame-ao-ui.png)
 
 ## Installation & Usage
@@ -20,8 +27,6 @@ This software can be falsely reported as malicious software.
 You have my word that it is Kosher. The binaries are built using GitHub Actions.
 
 Your Web browser, Windows, and other security software may attempt to block downloading and running MAME-AO & DOME-BT, check the pop-ups carefully there will be an option somewhere to allow.
-
-The command `.upany` after initial setup may help with Microsoft Defender notices.
 
 NOTE: Some software list items are infected. MAME-AO will download them if asked, this may trigger alerts if the software is DOS/Windows based. This is not dangerous to your computer, only to the system being emulated within MAME.
 
@@ -166,8 +171,10 @@ There are also commands available they all start with a dot `.`
 |.dbs|Software database SQL query|`.dbs SELECT softwarelist.* FROM softwarelist ORDER BY softwarelist.name`|
 |.export|Run the export function, [see export section](#export)|`.export mr C:\EXPORT`|
 |.fetch|Fetch all required assets, used for maintaining full sets|`.fetch sr`|
+|.help|Show a color-coded command reference|`.help`|
 |.import|Run the import function, [see import section](#import)|`.import C:\IMPORT`|
 |.list|List saved state and previous MAME versions|`.list`|
+|.place|Download & place specific assets for one machine/software (MR, MD, SR, SD, *)|`.place sr c64_cart arkanoid`|
 |.r|Reload `UI.html` & `_styles.css` usfull when developing the UI|`.r`|
 |.readme|Show the mame-ao README on github.com|`.readme`|
 |.report|Run reports, [see reports section](#reports)|`.report avsum`|
@@ -179,8 +186,7 @@ There are also commands available they all start with a dot `.`
 |.svg|Convert bitmaps to SVG, [see SVG section](#svg)|`.svg C:\snaps\file.png`|
 |.test|Perform asset place tests|`.test everything 100`|
 |.ui|Launch the UI in default browser|`.ui`|
-|.up|Self update MAME-AO to the latest on GitHub|`.up`|
-|.upany|Self update MAME-AO anyway even if up to date, this can be used to clear the Windows Defender warning on first install.|`.upany`|
+|.update|Download & place all missing assets + artwork/samples (MR, MD, SR, SD, *)|`.update sr`|
 |.valid|Validate the hash store, [see validate store section](#validate-store)|`.valid rom`|
 |.what|View current MAME whatsnew.txt in default browser.|`.what`|
 

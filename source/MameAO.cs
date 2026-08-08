@@ -108,25 +108,19 @@ namespace Spludlow.MameAO
 	{
 		public IntPtr ConsoleHandle = IntPtr.Zero;
 
-		private readonly string WelcomeText = @"@VERSION
-
-$$\      $$\  $$$$$$\  $$\      $$\ $$$$$$$$\        $$$$$$\   $$$$$$\  
-$$$\    $$$ |$$  __$$\ $$$\    $$$ |$$  _____|      $$  __$$\ $$  __$$\ 
-$$$$\  $$$$ |$$ /  $$ |$$$$\  $$$$ |$$ |            $$ /  $$ |$$ /  $$ |
-$$\$$\$$ $$ |$$$$$$$$ |$$\$$\$$ $$ |$$$$$\          $$$$$$$$ |$$ |  $$ |
-$$ \$$$  $$ |$$  __$$ |$$ \$$$  $$ |$$  __|         $$  __$$ |$$ |  $$ |
-$$ |\$  /$$ |$$ |  $$ |$$ |\$  /$$ |$$ |            $$ |  $$ |$$ |  $$ |
-$$ | \_/ $$ |$$ |  $$ |$$ | \_/ $$ |$$$$$$$$\       $$ |  $$ | $$$$$$  |
-\__|     \__|\__|  \__|\__|     \__|\________|      \__|  \__| \______/ 
-
-       Please wait the first time it has to prepare the data
-
-         The Web User Interface will pop up when ready
-
-              See the README for more information
-             https://github.com/sam-ludlow/mame-ao
-
-";
+		private readonly string WelcomeText = "\x1b[93m@VERSION\x1b[0m\n\n" +
+"\x1b[96m$$\\      $$\\  $$$$$$\\  $$\\      $$\\ $$$$$$$$\\        $$$$$$\\   $$$$$$\\  \n" +
+"\x1b[96m$$$\\    $$$ |$$  __$$\\ $$$\\    $$$ |$$  _____|      $$  __$$\\ $$  __$$\\ \n" +
+"\x1b[36m$$$$\\  $$$$ |$$ /  $$ |$$$$\\  $$$$ |$$ |            $$ /  $$ |$$ /  $$ |\n" +
+"\x1b[36m$$\\$$\\$$ $$ |$$$$$$$$ |$$\\$$\\$$ $$ |$$$$$\\          $$$$$$$$ |$$ |  $$ |\n" +
+"\x1b[34m$$ \\$$$  $$ |$$  __$$ |$$ \\$$$  $$ |$$  __|         $$  __$$ |$$ |  $$ |\n" +
+"\x1b[34m$$ |\\$  /$$ |$$ |  $$ |$$ |\\$  /$$ |$$ |            $$ |  $$ |$$ |  $$ |\n" +
+"\x1b[94m$$ | \\_/ $$ |$$ |  $$ |$$ | \\_/ $$ |$$$$$$$$\\       $$ |  $$ | $$$$$$  |\n" +
+"\x1b[94m\\__|     \\__|\\__|  \\__|\\__|     \\__|\\________|      \\__|  \\__| \\______/ \x1b[0m\n\n" +
+"       Please wait the first time it has to prepare the data\n\n" +
+"         The Web User Interface will pop up when ready\n\n" +
+"              See the README for more information\n" +
+"             https://github.com/sam-ludlow/mame-ao\n\n";
 
 		public MameAOProcessor(string rootDirectory)
 		{
@@ -323,20 +317,6 @@ $$ | \_/ $$ |$$ |  $$ |$$ | \_/ $$ |$$$$$$$$\       $$ |  $$ | $$$$$$  |
 			Globals.DiskHashStore = new HashStore(directory, Globals.MameChdMan.Hash);
 			Console.WriteLine("...done.");
 
-			//
-			// New version Check
-			//
-
-			string tag_name = Globals.GitHubRepos["mame-ao"].tag_name;
-			if (Globals.AssemblyVersion != tag_name)
-				Tools.ConsoleHeading(1, new string[] {
-					"New MAME-AO version available",
-					"",
-					$"{Globals.AssemblyVersion} => {tag_name}",
-					"",
-					"Automatically update with shell command \".up\".",
-				});
-
 			Console.WriteLine("");
 		}
 
@@ -459,6 +439,10 @@ $$ | \_/ $$ |$$ |  $$ |$$ | \_/ $$ |$$$$$$$$\       $$ |  $$ | $$$$$$  |
 			{
 				switch (args.First)
 				{
+					case ".help":
+						ShowHelp();
+						return null;
+
 					case ".list":
 						ListSavedState();
 						return null;
@@ -468,14 +452,6 @@ $$ | \_/ $$ |$$ |  $$ |$$ | \_/ $$ |$$$$$$$$\       $$ |  $$ | $$$$$$  |
 						if (parts.Length != 2)
 							throw new ApplicationException($"Usage: {parts[0]} <source directory>");
 						Import.ImportDirectory(parts[1]);
-						return null;
-
-					case ".up":
-						SelfUpdate.Update(0);
-						return null;
-
-					case ".upany":
-						SelfUpdate.Update(-1);
 						return null;
 
 					case ".favm":
@@ -723,6 +699,77 @@ $$ | \_/ $$ |$$ |  $$ |$$ | \_/ $$ |$$$$$$$$\       $$ |  $$ | $$$$$$  |
 						}
 						return null;
 
+					case ".place":
+						parts = args.Arguments(4);
+						if (parts.Length != 4)
+							throw new ApplicationException($"Usage: {parts[0]} <type: MR, MD, SR, SD, *> <machine name> <software name or empty>");
+
+						string placeType = parts[1].ToUpper();
+						string placeMachine = parts[2].ToLower();
+						string placeSoftware = parts[3].ToLower();
+
+						switch (placeType)
+						{
+							case "MR":
+								Place.PlaceMachineRoms(Globals.Core, placeMachine, true);
+								break;
+							case "MD":
+								Place.PlaceMachineDisks(Globals.Core, placeMachine, true);
+								break;
+							case "SR":
+								if (string.IsNullOrEmpty(placeSoftware))
+									throw new ApplicationException("Software name required for SR type.");
+								Operations.PlaceSoftwareAssets(Globals.Core, placeMachine, placeSoftware, true, false);
+								break;
+							case "SD":
+								if (string.IsNullOrEmpty(placeSoftware))
+									throw new ApplicationException("Software name required for SD type.");
+								Operations.PlaceSoftwareAssets(Globals.Core, placeMachine, placeSoftware, false, true);
+								break;
+							case "*":
+								Place.PlaceMachineRoms(Globals.Core, placeMachine, true);
+								Place.PlaceMachineDisks(Globals.Core, placeMachine, true);
+								if (!string.IsNullOrEmpty(placeSoftware))
+									Operations.PlaceSoftwareAssets(Globals.Core, placeMachine, placeSoftware, true, true);
+								break;
+
+							default:
+								throw new ApplicationException("Place Unknown type not (MR, MD, SR, SD, *).");
+						}
+						return null;
+
+					case ".update":
+						parts = args.Arguments(2);
+						if (parts.Length != 2)
+							throw new ApplicationException($"Usage: {parts[0]} <type: MR, MD, SR, SD, *>");
+
+						switch (parts[1].ToUpper())
+						{
+							case "MR":
+								Operations.UpdateAssets("MR");
+								break;
+							case "MD":
+								Operations.UpdateAssets("MD");
+								break;
+							case "SR":
+								Operations.UpdateAssets("SR");
+								break;
+							case "SD":
+								Operations.UpdateAssets("SD");
+								break;
+
+							case "*":
+								Operations.UpdateAssets("MR");
+								Operations.UpdateAssets("MD");
+								Operations.UpdateAssets("SR");
+								Operations.UpdateAssets("SD");
+								break;
+
+							default:
+								throw new ApplicationException("Update Unknown type not (MR, MD, SR, SD, *).");
+						}
+						return null;
+
 					case ".software":
 						parts = args.Arguments(2);
 						if (parts.Length != 2)
@@ -840,6 +887,87 @@ $$ | \_/ $$ |$$ |  $$ |$$ | \_/ $$ |$$$$$$$$\       $$ |  $$ | $$$$$$  |
 			Mame.RunMame(Path.Combine(Globals.Core.Directory, $"{Globals.Core.Name}.exe"), $"{machine} {software} {arguments}");
 
 			return machine;
+		}
+
+		private string FormatHelpLine(string command, string description)
+		{
+			// Strip ANSI codes to get actual visible length
+			string visibleCommand = System.Text.RegularExpressions.Regex.Replace(command, @"\x1b\[[0-9;]*m", "");
+			int padding = 36 - visibleCommand.Length;
+			return command + new string(' ', padding) + "- " + description;
+		}
+
+		public void ShowHelp()
+		{
+			Tools.ConsoleHeading(1, "MAME-AO Command Reference");
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== GENERAL COMMANDS ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.help\u001b[0m", "Show this help message"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.ui\u001b[0m", "Open web user interface"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.readme\u001b[0m", "Open README on GitHub"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.list\u001b[0m", "List saved game states"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== ASSET MANAGEMENT ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.fetch <type>\u001b[0m", "Download missing assets (MR, MD, SR, SD, *)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.update <type>\u001b[0m", "Download & place missing assets + artwork/samples (MR, MD, SR, SD, *)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.place <type> <machine> <sw>\u001b[0m", "Place specific assets (MR, MD, SR, SD, *)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.import <directory>\u001b[0m", "Import files from directory"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.export <type> <directory>\u001b[0m", "Export assets to directory"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== STORAGE ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.valid <rom|disk>\u001b[0m", "Validate hash store integrity"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== FAVORITES ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favm <machine>\u001b[0m", "Add machine to favorites"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favmx <machine>\u001b[0m", "Remove machine from favorites"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favs <machine> <list> <sw>\u001b[0m", "Add software to favorites"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.favsx <machine> <list> <sw>\u001b[0m", "Remove software from favorites"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== REPORTS & DATA ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.report <code>\u001b[0m", "Generate report (use without code for list)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.snap <directory>\u001b[0m", "Collect snapshots"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.dbm <query>\u001b[0m", "Query machine database"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.dbs <query>\u001b[0m", "Query software database"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.what\u001b[0m", "Show what's available"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== SYSTEM ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.core <name> [version]\u001b[0m", "Switch emulator core (mame, hbmame)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.set <key> <value>\u001b[0m", "Change settings"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.r\u001b[0m", "Refresh web UI assets"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== BITTORRENT ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.bt\u001b[0m", "Initialize BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.btx\u001b[0m", "Remove BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.btr\u001b[0m", "Restart BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.bts\u001b[0m", "Stop BitTorrent"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.creds\u001b[0m", "Enter Archive.org credentials"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== ADVANCED ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m.software <list>\u001b[0m", "Place entire software list"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.softname <list> <dir>\u001b[0m", "Export software list with names"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.svg <file|directory>\u001b[0m", "Convert bitmap to SVG"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.style\u001b[0m", "Save web UI style"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.accdb [directory]\u001b[0m", "Link SQLite to MS Access"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.upload <type> <item> <size>\u001b[0m", "Upload to Archive.org"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[96m=== RUNNING GAMES ===\u001b[0m");
+			Console.WriteLine(FormatHelpLine("\u001b[93m<machine>\u001b[0m", "Run machine (e.g., pacman)"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m<machine> <software>\u001b[0m", "Run machine with software"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m<machine> -<args>\u001b[0m", "Run machine with MAME arguments"));
+			Console.WriteLine(FormatHelpLine("\u001b[93m.<version>\u001b[0m", "Run specific MAME version"));
+			Console.WriteLine();
+
+			Console.WriteLine("\u001b[92mType codes: MR=Machine ROM, MD=Machine Disk, SR=Software ROM, SD=Software Disk, *=All\u001b[0m");
+			Console.WriteLine();
 		}
 
 		public void ListSavedState()

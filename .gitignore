@@ -348,3 +348,14 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Project-specific files
+AUTO_UPDATE_DISABLED.md
+MERGE_ANALYSIS.md
+
+# Runtime generated files and folders
+_Settings.txt
+_TEMP/
+_STORE/
+_STORE_DISK/
+mame/

@@ -308,25 +308,6 @@ namespace Spludlow.MameAO
 			writer.WriteLine(json.ToString(Formatting.Indented));
 		}
 
-		public void _api_update(HttpListenerContext context, StreamWriter writer)
-		{
-			Console.WriteLine();
-			Tools.ConsoleHeading(1, new string[] {
-				"Remote update recieved",
-			});
-			Console.WriteLine();
-
-			bool started = Globals.AO.RunLineTask(".up");
-
-			writer.WriteLine(started == true ?
-				"<html>Please wait, MAME-AO update has started.<br/><br/>Check the console to see what it's doing.<br/><br/>" +
-				"The database will be re-created so give it a moment.<br/><br/>The updated Web UI will apear when finished.</html>"
-
-				: "MAME-AO is busy. Is it already updating or running MAME? Kill all MAME-AO processes and try again.");
-
-			context.Response.Headers["Content-Type"] = "text/html";
-		}
-
 		public void _api_profiles(HttpListenerContext context, StreamWriter writer)
 		{
 			dynamic results = new JArray();

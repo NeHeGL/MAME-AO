@@ -34,12 +34,6 @@ namespace Spludlow.MameAO
 				return Operations.ProcessOperation(arguments);
 			}
 
-			if (arguments.ContainsKey("update") == true)
-			{
-				SelfUpdate.Update(Int32.Parse(arguments["update"]));
-				return 0;
-			}
-
 			Globals.AO.Run();
 
 			return 0;
